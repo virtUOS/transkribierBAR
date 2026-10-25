@@ -29,10 +29,19 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install ffmpeg
+      - name: Install ffmpeg and PulseAudio
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg
+          sudo apt-get install -y --no-install-recommends ffmpeg pulseaudio
+
+      # The runner has no audio output. Without one, Firefox never starts an
+      # AudioContext, which the recorder uses for its start beep and for mixing
+      # a second input. A null sink stands in for the speakers of a desktop.
+      - name: Start an audio server with a null sink
+        run: |
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=e2e
+          pactl set-default-sink e2e
 
       - name: Install backend dependencies
         working-directory: backend
