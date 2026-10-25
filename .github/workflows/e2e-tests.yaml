@@ -42,9 +42,9 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Install Chromium for Playwright
+      - name: Install Chromium and Firefox for Playwright
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium firefox
 
       - name: Run end-to-end tests
         working-directory: frontend
