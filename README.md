@@ -42,7 +42,7 @@
 The application uses a decoupled frontend/backend architecture:
 
 - **Frontend**: React 19 + TypeScript SPA built with Vite, using Zustand for state management and Tailwind CSS for styling.
-- **Backend**: FastAPI (Python 3.12) with async SQLite database, serving the built frontend as static files.
+- **Backend**: FastAPI (Python, version in `backend/.python-version`) with async SQLite database, serving the built frontend as static files.
 - **ASR**: Pluggable speech recognition backends — [MurmurAI](https://github.com/namastexlabs/murmurai) or WhisperX. With MurmurAI, the app deletes the server-side copy of each transcript as soon as it has stored the result, so transcripts on the ASR server do not outlive the app's own retention.
 - **LLM**: Pluggable LLM providers — OpenAI-compatible API (OpenAI, vLLM, etc.) or Ollama.
 - **Deployment**: Multi-stage Docker build combining both frontend and backend into a single image.
@@ -170,7 +170,7 @@ if `LLM_PROVIDER` is unset, analysis/translation/refinement endpoints return
 
 ### Backend
 
-Install Python dependencies (Python 3.12), run the FastAPI server, and run the test suite:
+Install Python dependencies (the version in `backend/.python-version`), run the FastAPI server, and run the test suite:
 
 ```bash
 cd backend
@@ -192,8 +192,8 @@ Edit the `.in` files, never the `.txt` files. Then regenerate both lock files
 from `backend/`:
 
 ```bash
-uv pip compile requirements.in --universal --python-version 3.12 --generate-hashes -o requirements.txt
-uv pip compile requirements-dev.in --universal --python-version 3.12 --generate-hashes -o requirements-dev.txt
+uv pip compile requirements.in --universal --python-version "$(cat .python-version)" --generate-hashes -o requirements.txt
+uv pip compile requirements-dev.in --universal --python-version "$(cat .python-version)" --generate-hashes -o requirements-dev.txt
 ```
 
 Existing pins are kept unless a change needs a new one. Add `--upgrade` (or
