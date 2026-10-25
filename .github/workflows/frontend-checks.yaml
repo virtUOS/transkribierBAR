@@ -36,4 +36,5 @@ jobs:
 
       - name: Test
         working-directory: frontend
-        run: npm test
+        # Fails below the coverage thresholds in vitest.config.ts.
+        run: npm run test:coverage
