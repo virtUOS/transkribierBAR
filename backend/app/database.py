@@ -3,6 +3,7 @@ import uuid
 import aiosqlite
 from contextlib import asynccontextmanager
 from app.config import settings
+from app.services.speaker_labels import relabel_stored_speakers
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -178,6 +179,11 @@ MIGRATIONS = [
     ("error_code", "transcriptions", "error_code TEXT"),
 ]
 
+# One-time data steps are keyed by PRAGMA user_version: init_db runs each step
+# whose number is above the stored version, then stores DATA_VERSION. The next
+# step goes under `if version < 2:`, with DATA_VERSION raised to 2.
+DATA_VERSION = 1
+
 
 async def init_db(db_path: str) -> None:
     global _db_path
@@ -255,6 +261,14 @@ async def init_db(db_path: str) -> None:
             "UPDATE analyses SET source = 'original' "
             "WHERE analysis_json IS NOT NULL AND source IS NULL"
         )
+        cursor = await db.execute("PRAGMA user_version")
+        version = (await cursor.fetchone())[0]
+        if version < 1:
+            # Refinements and translations stored before #215 carry speaker names
+            await relabel_stored_speakers(db)
+        if version < DATA_VERSION:
+            # Committed together with the steps above, so a crash reruns them
+            await db.execute(f"PRAGMA user_version = {DATA_VERSION}")
         await db.commit()
 
 

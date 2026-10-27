@@ -30,7 +30,7 @@ Klicken Sie im Reiter **Untertitel** über der Tabelle auf **Mit LLM verfeinern*
 2. **Kontext (optional)**: Hinweise, die dem Sprachmodell bei Fachbegriffen und Eigennamen helfen, zum Beispiel „Informatik-Vorlesung, Vortragende Person ist Prof. Müller“.
 3. **Verfeinern** startet die Verfeinerung. **Abbrechen** schließt den Dialog.
 
-Das Sprachmodell erhält das Original mit den Namen, die Sie unter **Namen der Sprechenden** vergeben haben. Vergeben Sie die Namen deshalb, bevor Sie verfeinern. Spätere Umbenennungen erreichen die Ansicht **Verfeinert** nicht mehr.
+Das Sprachmodell erhält das Original mit den gespeicherten Kennungen wie `SPEAKER_00`, nicht mit den Namen aus **Namen der Sprechenden**. Die Namen setzt transkribierBAR erst bei der Anzeige von **Verfeinert** ein. Sie können sie also vor oder nach dem Verfeinern vergeben und ändern. Sind Namen für die Korrektur wichtig, tragen Sie sie unter **Kontext (optional)** ein.
 
 Während der Verfeinerung steht auf der Schaltfläche **Transkription wird verfeinert...**, und das Kontextfeld und die Schaltflächen sind gesperrt. Bei mehr als 50 Äußerungen weist ein Hinweis darauf hin, dass die Verfeinerung mehrere Minuten dauern kann. Die Seite wartet auf das Sprachmodell. Bleiben Sie darauf, bis der Dialog sich schließt. Verlassen Sie die Seite trotzdem, läuft die Verfeinerung auf dem Server weiter. Sie sehen sie, wenn Sie die Transkription später erneut öffnen. Ein neuer Versuch, bevor sie fertig ist, schlägt fehl. Danach zeigt der Editor die Ansicht **Verfeinert**.
 
