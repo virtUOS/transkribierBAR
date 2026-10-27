@@ -343,4 +343,166 @@ async def test_failed_first_translation_leaves_no_translation():
             resp = await client.post(f"/api/translate/{txn_id}", json={"target_language": "en"})
 
     assert resp.status_code == 500
+    assert resp.json()["detail"] == "Translation failed"
+    assert await _stored_translation(txn_id) == (None, None, None, None)
+
+
+# ---------------------------------------------------------------------------
+# Error paths, caching, in-progress guard and user scoping
+# ---------------------------------------------------------------------------
+
+INTRUDER = {"X-Auth-Request-User": "intruder"}
+
+
+def _client(**kwargs):
+    return AsyncClient(transport=ASGITransport(app=app, **kwargs), base_url="http://test")
+
+
+@pytest.mark.asyncio
+async def test_translate_503_without_llm_provider():
+    async with _client() as client:
+        txn_id, _ = await _setup(client, txn_id="tr-nollm")
+        with patch("app.routers.translation.get_llm_provider", return_value=None):
+            resp = await client.post(f"/api/translate/{txn_id}", json={"target_language": "en"})
+    assert resp.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_translate_requires_target_language():
+    async with _client() as client:
+        txn_id, _ = await _setup(client, txn_id="tr-422")
+        with patch("app.routers.translation.get_llm_provider", return_value=AsyncMock()):
+            resp = await client.post(f"/api/translate/{txn_id}", json={})
+            bad_source = await client.post(f"/api/translate/{txn_id}", json={"target_language": "en", "source": "bogus"})
+    assert resp.status_code == 422
+    assert bad_source.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_translate_404_for_foreign_transcription():
+    async with _client() as client:
+        txn_id, _ = await _setup(client, txn_id="tr-foreign")
+        llm = AsyncMock()
+        with patch("app.routers.translation.get_llm_provider", return_value=AsyncMock()), \
+             patch("app.routers.translation._call_llm_translation", llm):
+            resp = await client.post(f"/api/translate/{txn_id}", json={"target_language": "en"}, headers=INTRUDER)
+    assert resp.status_code == 404
+    llm.assert_not_awaited()
+    assert await _stored_translation(txn_id) == (None, None, None, None)
+
+
+@pytest.mark.asyncio
+async def test_translate_400_while_transcription_not_completed():
+    from app.database import get_db
+    async with _client() as client:
+        txn_id, _ = await _setup(client, txn_id="tr-pending")
+        async with get_db() as db:
+            await db.execute("UPDATE transcriptions SET status = 'processing' WHERE id = ?", (txn_id,))
+            await db.commit()
+        with patch("app.routers.translation.get_llm_provider", return_value=AsyncMock()):
+            resp = await client.post(f"/api/translate/{txn_id}", json={"target_language": "en"})
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_translate_429_while_translation_in_progress():
+    from app.database import get_db
+    async with _client() as client:
+        txn_id, _ = await _setup(client, txn_id="tr-busy")
+        async with get_db() as db:
+            await db.execute(
+                "UPDATE transcriptions SET translated_utterances_json = '', translation_language = 'fr' WHERE id = ?",
+                (txn_id,),
+            )
+            await db.commit()
+        llm = AsyncMock()
+        with patch("app.routers.translation.get_llm_provider", return_value=AsyncMock()), \
+             patch("app.routers.translation._call_llm_translation", llm):
+            resp = await client.post(f"/api/translate/{txn_id}", json={"target_language": "en"})
+            get_resp = await client.get(f"/api/translate/{txn_id}")
+    assert resp.status_code == 429
+    llm.assert_not_awaited()
+    assert get_resp.status_code == 404  # the in-progress marker is not a translation
+
+
+@pytest.mark.asyncio
+async def test_translate_returns_cached_result_for_same_language():
+    async with _client() as client:
+        txn_id, _ = await _setup(client, txn_id="tr-cache")
+        llm = AsyncMock(return_value=_translated(["Hello world", "How are you"]))
+        with patch("app.routers.translation.get_llm_provider", return_value=AsyncMock()), \
+             patch("app.routers.translation._call_llm_translation", llm):
+            first = await client.post(f"/api/translate/{txn_id}", json={"target_language": "en"})
+            second = await client.post(f"/api/translate/{txn_id}", json={"target_language": "en"})
+            third = await client.post(f"/api/translate/{txn_id}", json={"target_language": "fr"})
+    assert first.status_code == second.status_code == third.status_code == 200
+    assert second.json()["utterances"] == first.json()["utterances"]
+    assert second.json()["stale"] is False
+    assert second.json()["source_hash"] == first.json()["source_hash"]
+    # Only the first and the different-language request reached the LLM
+    assert llm.await_count == 2
+    assert third.json()["language"] == "fr"
+
+
+@pytest.mark.asyncio
+async def test_translate_count_mismatch_is_rejected_and_reset():
+    async with _client() as client:
+        txn_id, _ = await _setup(client, txn_id="tr-mismatch")
+        with patch("app.routers.translation.get_llm_provider", return_value=AsyncMock()), \
+             patch("app.routers.translation._call_llm_translation", AsyncMock(return_value=_translated(["only one"]))):
+            resp = await client.post(f"/api/translate/{txn_id}", json={"target_language": "en"})
+    assert resp.status_code == 500
+    assert "expected 2" in resp.json()["detail"]
+    assert await _stored_translation(txn_id) == (None, None, None, None)
+
+
+@pytest.mark.asyncio
+async def test_call_llm_translation_concatenates_chunks_in_order():
+    from app.routers.translation import _call_llm_translation
+    chunked = AsyncMock(return_value=[{"utterances": [{"text": "a"}]}, {"utterances": [{"text": "b"}, {"text": "c"}]}, {}])
+    with patch("app.routers.translation.chunked_utterance_call", chunked):
+        out = await _call_llm_translation(AsyncMock(), [{"text": "x"}] * 3, "en")
+    assert out == [{"text": "a"}, {"text": "b"}, {"text": "c"}]
+    kwargs = chunked.await_args.kwargs
+    assert kwargs["operation"] == "translation"
+    assert kwargs["expect_same_count"] is True
+    assert "English" in kwargs["build_system"]()
+
+
+@pytest.mark.asyncio
+async def test_get_translation_404s():
+    async with _client() as client:
+        txn_id, _ = await _setup(client, txn_id="tr-get-404")
+        none_yet = await client.get(f"/api/translate/{txn_id}")
+        with patch("app.routers.translation.get_llm_provider", return_value=AsyncMock()), \
+             patch("app.routers.translation._call_llm_translation",
+                   AsyncMock(return_value=_translated(["Hello world", "How are you"]))):
+            await client.post(f"/api/translate/{txn_id}", json={"target_language": "en"})
+        foreign = await client.get(f"/api/translate/{txn_id}", headers=INTRUDER)
+        missing = await client.get("/api/translate/does-not-exist")
+        own = await client.get(f"/api/translate/{txn_id}")
+    assert none_yet.status_code == 404
+    assert foreign.status_code == 404
+    assert missing.status_code == 404
+    assert own.status_code == 200
+    assert own.json()["language"] == "en"
+    assert own.json()["stale"] is False
+
+
+@pytest.mark.asyncio
+async def test_delete_translation_and_scoping():
+    async with _client() as client:
+        txn_id, _ = await _setup(client, txn_id="tr-del")
+        with patch("app.routers.translation.get_llm_provider", return_value=AsyncMock()), \
+             patch("app.routers.translation._call_llm_translation",
+                   AsyncMock(return_value=_translated(["Hello world", "How are you"]))):
+            await client.post(f"/api/translate/{txn_id}", json={"target_language": "en"})
+
+        foreign = await client.delete(f"/api/translate/{txn_id}", headers=INTRUDER)
+        assert foreign.status_code == 404
+        assert (await _stored_translation(txn_id))[1] == "en"
+
+        resp = await client.delete(f"/api/translate/{txn_id}")
+        assert resp.status_code == 200
+        assert (await client.get(f"/api/translate/{txn_id}")).status_code == 404
     assert await _stored_translation(txn_id) == (None, None, None, None)
