@@ -177,6 +177,9 @@ MIGRATIONS = [
     ("source", "analyses", "source TEXT"),
     ("source_hash", "analyses", "source_hash TEXT"),
     ("error_code", "transcriptions", "error_code TEXT"),
+    # The first stored result; restored by the editor's Restore original.
+    # Written only on completion and by the backfill in init_db.
+    ("original_result_json", "transcriptions", "original_result_json TEXT"),
 ]
 
 # One-time data steps are keyed by PRAGMA user_version: init_db runs each step
@@ -260,6 +263,12 @@ async def init_db(db_path: str) -> None:
         await db.execute(
             "UPDATE analyses SET source = 'original' "
             "WHERE analysis_json IS NOT NULL AND source IS NULL"
+        )
+        # Rows from before original_result_json existed get their state at the
+        # update as their original (only NULL rows change)
+        await db.execute(
+            "UPDATE transcriptions SET original_result_json = result_json "
+            "WHERE original_result_json IS NULL AND result_json IS NOT NULL"
         )
         cursor = await db.execute("PRAGMA user_version")
         version = (await cursor.fetchone())[0]

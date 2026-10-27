@@ -52,7 +52,11 @@ Unter dem Player lädt **Aufnahme herunterladen** die Aufnahme herunter. Bei Vid
 
 ## Speichern
 
-Sobald Sie etwas geändert haben, erscheinen über der Tabelle die Schaltflächen **Änderungen speichern** und **Original wiederherstellen**. Speichern ersetzt die bisher gespeicherte Fassung auf dem Server. **Original wiederherstellen** verwirft nach einer Rückfrage alle Änderungen seit dem letzten Speichern und lädt die gespeicherte Fassung neu. Eine frühere Fassung hebt transkribierBAR nach dem Speichern nicht auf.
+Sobald Sie etwas geändert haben, erscheinen über der Tabelle die Schaltflächen **Änderungen verwerfen** und **Änderungen speichern**. Speichern ersetzt die bisher gespeicherte Fassung auf dem Server. **Änderungen verwerfen** verwirft nach einer Rückfrage alle Änderungen seit dem letzten Speichern und lädt die gespeicherte Fassung neu.
+
+Außerdem hebt transkribierBAR die Transkription so auf, wie die Spracherkennung sie geliefert hat. Speichern ändert dieses Original nie. Sobald die gespeicherte Fassung davon abweicht, erscheint die Schaltfläche **Original wiederherstellen**. Nach einer Rückfrage lädt sie dieses Original in den Editor: Text, Zeiten und sprechende Person jeder Zeile. Ist gerade die Ansicht **Verfeinert** oder **Übersetzt** zu sehen, wechselt der Editor zu **Original**. Bis Sie auf **Änderungen speichern** klicken, ist das wiederhergestellte Original eine ungespeicherte Änderung wie jede andere: Die gespeicherte Fassung bleibt auf dem Server, und **Änderungen verwerfen** holt sie zurück. Die Namen aus dem Bereich **Namen der Sprechenden** bleiben. Auch eine Verfeinerung, Übersetzung oder Analyse bleibt erhalten. Ob sie danach als veraltet gilt, hängt wie nach jeder anderen Änderung vom gespeicherten Text ab. Das Original wird zusammen mit der Transkription gelöscht.
+
+Für eine Transkription, die es schon gab, bevor transkribierBAR begann, das Original aufzuheben, gilt als Original die Fassung, die zu diesem Zeitpunkt gespeichert war, einschließlich früher gespeicherter Änderungen.
 
 Wechseln Sie zu einem Format-Reiter wie **SRT**, bleiben Ihre Änderungen erhalten, und das Format zeigt sie bereits.
 

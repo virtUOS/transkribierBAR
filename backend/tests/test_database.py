@@ -136,3 +136,61 @@ async def test_legacy_analyses_table_migrates_in_one_start(tmp_path):
         rows = await cursor.fetchall()
     assert {"id", "source", "source_hash"} <= columns
     assert [(r[0], r[1]) for r in rows] == [("legacy-txn", "original")]
+
+
+def _legacy_transcriptions_db(db_path):
+    """A database from before original_result_json existed."""
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE transcriptions (id TEXT PRIMARY KEY, user_id TEXT, file_id TEXT, "
+        "status TEXT, result_json TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO transcriptions (id, status, result_json) VALUES "
+        "('edited', 'completed', "
+        "'[{\"start\": 0, \"end\": 1000, \"text\": \"saved edit\", \"speaker\": \"SPEAKER_00\"}]')"
+    )
+    conn.execute(
+        "INSERT INTO transcriptions (id, status, result_json) VALUES ('running', 'processing', NULL)"
+    )
+    conn.commit()
+    conn.close()
+
+
+@pytest.mark.asyncio
+async def test_legacy_transcriptions_get_their_current_state_as_original_in_one_start(tmp_path):
+    db_path = str(tmp_path / "legacy.db")
+    _legacy_transcriptions_db(db_path)
+
+    await init_db(db_path)
+
+    async with get_db(db_path) as db:
+        cursor = await db.execute(
+            "SELECT id, result_json, original_result_json FROM transcriptions"
+        )
+        rows = {r[0]: r for r in await cursor.fetchall()}
+    assert rows["edited"]["original_result_json"] == rows["edited"]["result_json"]
+    assert rows["running"]["original_result_json"] is None
+
+
+@pytest.mark.asyncio
+async def test_backfill_never_overwrites_a_stored_original(tmp_path):
+    db_path = str(tmp_path / "keep.db")
+    await init_db(db_path)
+    asr = '[{"start": 0, "end": 1, "text": "asr", "speaker": null}]'
+    async with get_db(db_path) as db:
+        await db.execute(
+            "INSERT INTO transcriptions (id, status, result_json, original_result_json) "
+            "VALUES ('t1', 'completed', ?, ?)",
+            ('[{"start": 0, "end": 1, "text": "edited", "speaker": null}]', asr),
+        )
+        await db.commit()
+
+    await init_db(db_path)
+
+    async with get_db(db_path) as db:
+        cursor = await db.execute("SELECT original_result_json FROM transcriptions WHERE id = 't1'")
+        row = await cursor.fetchone()
+    assert row["original_result_json"] == asr

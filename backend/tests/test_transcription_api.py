@@ -134,6 +134,38 @@ async def test_deleted_during_processing_skips_title(mock_asr):
         assert await cursor.fetchone() is None
 
 
+@pytest.mark.asyncio
+async def test_completion_stores_the_asr_result_as_the_original(mock_asr):
+    import json
+    from app.database import get_db
+    from app.models import TranscriptionSettings as TranscriptionSettingsModel
+    from app.routers.transcription import _run_transcription
+
+    async with get_db() as db:
+        await db.execute(
+            "INSERT INTO transcriptions (id, asr_backend, status) VALUES (?, ?, ?)",
+            ("txn-orig", "murmurai", "pending"),
+        )
+        await db.commit()
+    req = TranscriptionSettingsModel(file_id="file-1", language="en", model="base")
+
+    with patch("app.routers.transcription.get_asr_backend", return_value=mock_asr), \
+         patch("app.services.llm.get_llm_provider", return_value=None):
+        await _run_transcription("txn-orig", "/nonexistent/audio.mp3", req, submitted_at=0.0)
+
+    async with get_db() as db:
+        cursor = await db.execute(
+            "SELECT status, result_json, original_result_json FROM transcriptions WHERE id = ?",
+            ("txn-orig",),
+        )
+        row = await cursor.fetchone()
+    assert row["status"] == "completed"
+    assert row["original_result_json"] == row["result_json"]
+    assert json.loads(row["original_result_json"]) == [
+        {"start": 0, "end": 1000, "text": "Hello", "speaker": "Speaker 1"}
+    ]
+
+
 async def _insert_file(file_path, mp3_path):
     from app.database import get_db
     async with get_db() as db:
