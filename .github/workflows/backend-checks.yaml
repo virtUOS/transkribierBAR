@@ -22,10 +22,40 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements-dev.txt
 
-      - name: Install ffmpeg
+      # The runner's apt mirror sometimes serves the ~50 MB of ffmpeg packages
+      # at tens of kB/s, so they come from the Actions cache instead (#283).
+      # Package file names carry their versions: an Ubuntu update changes the key.
+      - name: Resolve ffmpeg packages
+        id: ffmpeg
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg
+          prefix="ffmpeg-debs-$(. /etc/os-release; echo "$VERSION_ID")-"
+          hash=$(sudo apt-get install --print-uris -qq --no-install-recommends ffmpeg | awk '{print $2}' | sort | sha256sum | cut -c1-16)
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          echo "key=$prefix$hash" >> "$GITHUB_OUTPUT"
+
+      - name: Restore ffmpeg packages
+        id: ffmpeg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/ffmpeg-debs
+          key: ${{ steps.ffmpeg.outputs.key }}
+          restore-keys: ${{ steps.ffmpeg.outputs.prefix }}
+
+      - name: Install ffmpeg
+        run: |
+          mkdir -p ~/ffmpeg-debs/partial
+          sudo apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$HOME/ffmpeg-debs" ffmpeg
+          # Drop superseded versions; apt leaves partial/ and its lock unreadable to the cache step
+          sudo apt-get -o Dir::Cache::Archives="$HOME/ffmpeg-debs" autoclean
+          sudo chown -R "$(id -u):$(id -g)" ~/ffmpeg-debs
+
+      - name: Save ffmpeg packages
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/ffmpeg-debs
+          key: ${{ steps.ffmpeg.outputs.key }}
 
       - name: Install dependencies
         working-directory: backend
