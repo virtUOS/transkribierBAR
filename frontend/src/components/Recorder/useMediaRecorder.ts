@@ -18,6 +18,7 @@ interface UseMediaRecorderReturn {
   stream: MediaStream | null
   duration: number
   error: string | null
+  hasVideo: boolean
   start: () => Promise<void>
   pause: () => void
   resume: () => void
@@ -44,6 +45,7 @@ export function useMediaRecorder(options: UseMediaRecorderOptions = {}): UseMedi
   const [duration, setDuration] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [stream, setStream] = useState<MediaStream | null>(null)
+  const [hasVideo, setHasVideo] = useState(false)
 
   const recorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -136,6 +138,7 @@ export function useMediaRecorder(options: UseMediaRecorderOptions = {}): UseMedi
     discardingRef.current = false
     setError(null)
     setBlob(null)
+    setHasVideo(false)
     chunksRef.current = []
     resetTimer()
 
@@ -352,6 +355,8 @@ export function useMediaRecorder(options: UseMediaRecorderOptions = {}): UseMedi
 
       recorderRef.current = recorder
       recorder.start(1000)
+      // Only once the recorder runs, so a failed start never reports video
+      setHasVideo(hasVideo)
       setState('recording')
       startTimer()
     } catch (err) {
@@ -397,13 +402,14 @@ export function useMediaRecorder(options: UseMediaRecorderOptions = {}): UseMedi
     }
     stopAllTracks()
     setBlob(null)
+    setHasVideo(false)
     chunksRef.current = []
     resetTimer()
     setState('idle')
     setError(null)
   }, [stopAllTracks, resetTimer])
 
-  return { state, blob, stream, duration, error, start, pause, resume, stop, discard }
+  return { state, blob, stream, duration, error, hasVideo, start, pause, resume, stop, discard }
 }
 
 export { getFileExtension, getPreferredMimeType }

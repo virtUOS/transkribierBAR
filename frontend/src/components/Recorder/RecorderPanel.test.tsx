@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import i18n from '../../i18n'
+import { api } from '../../api/client'
+import type { FileInfo } from '../../api/types'
 import { useStore } from '../../store'
 import { RecorderPanel } from './RecorderPanel'
 
@@ -8,9 +10,10 @@ const recorder = vi.hoisted(() => ({
   current: {
     state: 'idle' as string,
     blob: null as Blob | null,
-    stream: null,
+    stream: null as MediaStream | null,
     duration: 0,
     error: null,
+    hasVideo: false,
     start: vi.fn(),
     pause: vi.fn(),
     resume: vi.fn(),
@@ -25,7 +28,11 @@ vi.mock('./useMediaRecorder', () => ({
   getPreferredMimeType: () => 'audio/webm',
 }))
 
-vi.mock('./RecordingSources', () => ({ RecordingSources: () => null }))
+vi.mock('./RecordingSources', () => ({
+  RecordingSources: ({ onUseCameraChange }: { onUseCameraChange: (on: boolean) => void }) => (
+    <button onClick={() => onUseCameraChange(true)}>Camera on</button>
+  ),
+}))
 vi.mock('./AudioLevelMeter', () => ({ AudioLevelMeter: () => null }))
 
 describe('RecorderPanel recording guard', () => {
@@ -77,5 +84,46 @@ describe('RecorderPanel start beep', () => {
     render(<RecorderPanel />)
     fireEvent.click(screen.getByRole('button', { name: 'Start Recording' }))
     expect(recorder.current.start).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('RecorderPanel after the camera fell back to audio only', () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage('en')
+    useStore.getState().reset()
+    recorder.current.state = 'idle'
+    recorder.current.blob = null
+    recorder.current.stream = null
+    recorder.current.hasVideo = false
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('shows the level meter, not a video preview, while recording', () => {
+    const { container, rerender } = render(<RecorderPanel />)
+    fireEvent.click(screen.getByRole('button', { name: 'Camera on' }))
+
+    recorder.current.state = 'recording'
+    recorder.current.stream = {} as MediaStream
+    rerender(<RecorderPanel />)
+
+    expect(container.querySelector('video')).toBeNull()
+  })
+
+  it('uploads the recording with has_video false', async () => {
+    const upload = vi.spyOn(api, 'uploadRecording').mockResolvedValue({
+      id: 'f1', original_filename: 'recording.webm', file_size: 3,
+    } as FileInfo)
+    const { rerender } = render(<RecorderPanel />)
+    fireEvent.click(screen.getByRole('button', { name: 'Camera on' }))
+
+    recorder.current.state = 'stopped'
+    recorder.current.blob = new Blob(['abc'], { type: 'audio/webm' })
+    rerender(<RecorderPanel />)
+
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(1))
+    expect(upload).toHaveBeenCalledWith(expect.any(File), false)
   })
 })

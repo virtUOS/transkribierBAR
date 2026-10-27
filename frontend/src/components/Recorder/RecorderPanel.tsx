@@ -33,17 +33,18 @@ export function RecorderPanel() {
     if (capture) setUseCamera(false)
   }, [])
 
-  const { state, blob, stream, duration, error, start, pause, resume, stop, discard } =
+  const { state, blob, stream, duration, error, hasVideo, start, pause, resume, stop, discard } =
     useMediaRecorder({ audioDeviceId, videoDeviceId, useCamera, captureSystemAudio, secondAudioDeviceId, useMicrophone })
 
   const videoPreviewRef = useRef<HTMLVideoElement>(null)
 
-  // Webcam preview
+  // Webcam preview, only when the stream really carries video (the camera can
+  // be denied and fall back to audio only while the toggle stays on)
   useEffect(() => {
-    if (videoPreviewRef.current && stream && useCamera) {
+    if (videoPreviewRef.current && stream && hasVideo) {
       videoPreviewRef.current.srcObject = stream
     }
-  }, [stream, useCamera])
+  }, [stream, hasVideo])
 
   // Tell the store a recording is at stake so every leave path asks first.
   const setRecordingActive = useStore((s) => s.setRecordingActive)
@@ -58,20 +59,23 @@ export function RecorderPanel() {
     setUploadError(null)
 
     try {
-      const mimeType = blob.type || getPreferredMimeType(useCamera)
+      const mimeType = blob.type || getPreferredMimeType(hasVideo)
       const ext = getFileExtension(mimeType)
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
       const filename = `recording-${timestamp}.${ext}`
       const file = new File([blob], filename, { type: mimeType })
 
-      const fileInfo = await api.uploadRecording(file, useCamera)
+      // Upload the video flag the recording actually carries, not the camera
+      // toggle: when the camera was denied the stream fell back to audio only
+      // and the file must be stored has_video=false (see #200).
+      const fileInfo = await api.uploadRecording(file, hasVideo)
       setFile(fileInfo)
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : t('recorder.uploadFailed'))
     } finally {
       setUploading(false)
     }
-  }, [blob, useCamera, setFile, t])
+  }, [blob, hasVideo, setFile, t])
 
   // Auto-upload once the recording is captured — avoids a second "Transcribe"
   // press on an intermediate page. The settings panel + Transcribe / Discard
@@ -149,7 +153,7 @@ export function RecorderPanel() {
       {/* Video preview or audio level meter */}
       {state !== 'stopped' && (
         <div className="flex justify-center">
-          {useCamera && !captureSystemAudio && stream ? (
+          {hasVideo && stream ? (
             <video
               ref={videoPreviewRef}
               autoPlay
