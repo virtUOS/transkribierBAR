@@ -20,6 +20,7 @@ from app.metrics import inc, gauge_set, cleanup_runs_total, cleanup_items_delete
 from app.services.asr import get_asr_backend
 from app.services.audio import has_video_stream
 from app.services.api_tokens import cleanup_stale_tokens, count_active_tokens
+from app.services.token_expiry import send_expiry_reminders
 
 
 install_token_redaction()
@@ -233,7 +234,8 @@ async def cleanup_old_files():
                 inc(invitations_expired_total)
             _refresh_storage_gauge()
 
-            # Last, so an unreachable ASR host only delays the remote deletes.
+            # After the local steps, so an unreachable ASR host only delays the
+            # remote deletes and the reminders.
             if asr_job_ids:
                 asr_backend = get_asr_backend()
                 for job_id in asr_job_ids:
@@ -241,6 +243,16 @@ async def cleanup_old_files():
         except Exception as e:
             inc(cleanup_runs_total, "failed")
             print(f"Cleanup error: {e}")
+
+        # Last and on their own, so a slow relay delays nothing else and an
+        # error in them neither skips a cleanup step nor fails the run.
+        try:
+            async with get_db() as db:
+                reminders = await send_expiry_reminders(db)
+            if any(reminders.values()):
+                print("Token expiry reminders: " + ", ".join(f"{k}={v}" for k, v in reminders.items()))
+        except Exception as e:
+            print(f"Token expiry reminder error: {e}")
 
 
 @asynccontextmanager

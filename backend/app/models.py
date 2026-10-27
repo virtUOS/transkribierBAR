@@ -385,3 +385,4 @@ class TokenListItem(BaseModel):
     expires_at: str | None = None
     last_used_at: str | None = None
     revoked_at: str | None = None
+    expiry_warning: Literal["soon", "expired"] | None = None

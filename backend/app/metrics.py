@@ -163,6 +163,10 @@ api_token_auth_total = _counter(
     ["result"],  # result: success | failure
 )
 api_tokens_active = _gauge("transcription_api_tokens_active", "Active (non-revoked, non-expired) API tokens")
+api_token_expiry_reminders_total = _counter(
+    "transcription_api_token_expiry_reminders_total", "API token expiry reminders by outcome",
+    ["result"],  # result: sent | logged | rejected | failed
+)
 
 # --- Users ---
 users_total = _gauge(

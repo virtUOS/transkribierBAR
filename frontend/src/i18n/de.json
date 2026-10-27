@@ -58,6 +58,9 @@
       "revoking": "Wird widerrufen…",
       "creating": "Wird erstellt…",
       "expiresOnTmpl": "läuft ab am {{date}}",
+      "expiringSoonTmpl": "„{{name}}“ läuft am {{date}} ab.",
+      "expiredTmpl": "„{{name}}“ ist am {{date}} abgelaufen.",
+      "expiryNote": "Tokens lassen sich nicht verlängern. Erstellen Sie einen neuen Token und ersetzen Sie den alten in Ihren Skripten.",
       "lastUsedTmpl": "zuletzt verwendet {{date}}",
       "empty": "Noch keine API-Tokens. Erstellen Sie einen, um zu beginnen.",
       "errors": {
@@ -476,6 +479,7 @@
     "newRecording": "Aufnehmen",
     "presets": "Voreinstellungen",
     "settings": "Einstellungen",
+    "settingsAttention": "Ein API-Token läuft bald ab oder ist abgelaufen",
     "menu": "Menü"
   },
   "common": {
