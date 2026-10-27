@@ -19,7 +19,7 @@ Hat die Aufnahme keine erkannten Sprechenden, zeigt der Bereich **Keine Sprechen
 
 Der Bereich listet jede sprechende Person mit dem Namen auf, der gerade angezeigt wird. Ohne eigenen Namen ist das die gespeicherte Kennung, zum Beispiel `SPEAKER_00`. Tragen Sie rechts davon im Feld einen neuen Namen ein und klicken Sie auf **Anwenden**. Felder, die Sie leer lassen (**Neuer Name (leer lassen zum Beibehalten)**), behalten ihren Namen. Leerzeichen am Anfang und Ende des Namens entfernt transkribierBAR. **Abbrechen** schließt den Bereich ohne Änderung.
 
-Der neue Name steht danach in der Tabelle, bei Videos in der Untertitelspur des Players und in den Reitern **SRT**, **VTT**, **JSON** und **TXT** samt deren Downloads. Das gilt für das Original und für eine Übersetzung, die aus dem Original entstand. In **Verfeinert** bleiben die Namen stehen, die bei der Verfeinerung galten, ebenso in einer daraus erstellten Übersetzung. Haben Sie schon Namen vergeben, schlägt das Feld sie zur Auswahl vor.
+Der neue Name steht danach in der Tabelle, bei Videos in der Untertitelspur des Players und in den Reitern **SRT**, **VTT**, **JSON** und **TXT** samt deren Downloads. Das gilt für das Original, für **Verfeinert** und für eine Übersetzung, gleich aus welcher der beiden Fassungen sie entstand. Haben Sie schon Namen vergeben, schlägt das Feld sie zur Auswahl vor.
 
 ## Personen zusammenführen
 

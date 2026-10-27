@@ -20,6 +20,7 @@ from app.services.llm.prompt import (
     chunk_ranges,
     _language_name,
 )
+from app.services.speaker_labels import with_speakers_from
 
 class OutputLimitExceeded(ValueError):
     """The reply reached the request's output-token cap and is incomplete.
@@ -177,6 +178,10 @@ async def chunked_utterance_call(
                 return data
             last_count = len(data.get("utterances", []))
             if last_count == len(chunk):
+                # Issue #215: the model is told to keep the speaker but does
+                # not reliably do so; the count check above is what makes
+                # matching by position safe.
+                data["utterances"] = with_speakers_from(chunk, data["utterances"])
                 return data
             logging.warning(
                 "%s chunk returned %d utterances, expected %d (attempt %d/%d)",
