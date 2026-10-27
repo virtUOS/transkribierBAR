@@ -44,7 +44,7 @@ In the **Refined** view, a bar above the table summarizes the changes, and chang
 
 1. **Refined** switches to the refined view, **Original** back to the original.
 2. The **Changes Summary**, with the number of changed utterances. Click it to expand or collapse. Expanded, it describes in words what the language model changed and names the **Context**, if you gave one.
-3. A changed row: it has an amber stripe on the left edge and, on larger screens, a dot next to the row number. Clicking the dot shows **Original** and **Refined** side by side (larger screens only), as below the first row here.
+3. A changed row: it has an amber stripe on the left edge, on larger screens a dot next to the row number, and a **Compare** button next to the text. **Compare** shows **Original** and **Refined** side by side below the row, as below the changed row here. Click it again to close the comparison.
 
 The view is read-only. If you want to change text yourself, do so in the original.
 

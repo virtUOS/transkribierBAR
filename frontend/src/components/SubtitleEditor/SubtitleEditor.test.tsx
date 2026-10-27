@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import i18n from '../../i18n'
 import { useStore } from '../../store'
 import { api, ApiError } from '../../api/client'
@@ -338,5 +338,149 @@ describe('SubtitleEditor translation language', () => {
     render(<SubtitleEditor />)
     fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
     expect(screen.getByLabelText('Translation language')).toHaveValue('en')
+  })
+})
+
+describe('SubtitleEditor compare control', () => {
+  const COMPARE = { name: 'Compare with original' }
+
+  function setRefined(changed: number[]) {
+    useStore.setState({
+      refinedUtterances: [
+        { start: 1500, end: 4000, text: 'Hello there!', speaker: 'SPEAKER_00' },
+        { start: 100000, end: 120000, text: 'General Kenobi', speaker: 'SPEAKER_01' },
+      ],
+      refinementMetadata: {
+        changed_indices: changed,
+        changes_summary: 'Punctuation',
+        context: null,
+        llm_provider: null,
+        llm_model: null,
+        created_at: null,
+        failed_ranges: [],
+        source_hash: null,
+      },
+      activeView: 'refined',
+    })
+  }
+
+  beforeEach(() => {
+    setRefined([0])
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('shows the button on changed rows only', () => {
+    render(<SubtitleEditor />)
+    const buttons = screen.getAllByRole('button', COMPARE)
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0].closest('tr')?.textContent).toContain('Hello there!')
+    const kenobi = screen.getByText('General Kenobi').closest('tr')!
+    expect(within(kenobi).queryByRole('button', COMPARE)).toBeNull()
+  })
+
+  it('starts collapsed and toggles the comparison', () => {
+    render(<SubtitleEditor />)
+    const button = screen.getByRole('button', COMPARE)
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('Original:')).toBeNull()
+    fireEvent.click(button)
+    expect(button).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('Original:')).toBeInTheDocument()
+    const diff = document.querySelector('[data-help="row-diff"]')!
+    expect(diff.textContent).toContain('Hello there')
+    fireEvent.click(button)
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('Original:')).toBeNull()
+  })
+
+  it('points aria-controls at its own comparison row', () => {
+    render(<SubtitleEditor />)
+    const button = screen.getByRole('button', COMPARE)
+    fireEvent.click(button)
+    const id = button.getAttribute('aria-controls')
+    expect(id).toBeTruthy()
+    expect(document.getElementById(id!)).toBe(document.querySelector('[data-help="row-diff"]'))
+  })
+
+  it('is a focusable native button', () => {
+    render(<SubtitleEditor />)
+    const button = screen.getByRole('button', COMPARE)
+    button.focus()
+    expect(document.activeElement).toBe(button)
+    expect(button.tagName).toBe('BUTTON')
+    expect(button.getAttribute('type')).toBe('button')
+    fireEvent.click(button)
+    expect(button).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('carries the pressed style class for the open state', () => {
+    render(<SubtitleEditor />)
+    const button = screen.getByRole('button', COMPARE)
+    expect(button.className).toContain('aria-expanded:bg-amber-900/40')
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(button)
+    expect(button).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('does not seek the player when clicked', () => {
+    vi.useFakeTimers()
+    render(<SubtitleEditor />)
+    fireEvent.click(screen.getByRole('button', COMPARE))
+    act(() => { vi.advanceTimersByTime(500) })
+    expect(useStore.getState().seekTo).toBeNull()
+  })
+
+  it('renders no button in the Original view', () => {
+    useStore.setState({ activeView: 'original' })
+    render(<SubtitleEditor />)
+    expect(screen.queryByRole('button', COMPARE)).toBeNull()
+    expect(document.querySelector('[data-help="row-diff"]')).toBeNull()
+  })
+
+  it('hides the comparison when switching back to Original with it open', () => {
+    render(<SubtitleEditor />)
+    fireEvent.click(screen.getByRole('button', COMPARE))
+    expect(document.querySelector('[data-help="row-diff"]')).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Original' }))
+    expect(document.querySelector('[data-help="row-diff"]')).toBeNull()
+    expect(screen.queryByRole('button', COMPARE)).toBeNull()
+  })
+
+  it('uses its own comparison for each changed row', () => {
+    setRefined([0, 1])
+    render(<SubtitleEditor />)
+    const [first, second] = screen.getAllByRole('button', COMPARE)
+    fireEvent.click(second)
+    expect(first).toHaveAttribute('aria-expanded', 'false')
+    expect(second).toHaveAttribute('aria-expanded', 'true')
+    expect(first.getAttribute('aria-controls')).not.toBe(second.getAttribute('aria-controls'))
+  })
+
+  it('opens a comparison for an empty original text', () => {
+    const result = transcript()
+    result.utterances[0].text = ''
+    useStore.setState({ transcriptionResult: result })
+    render(<SubtitleEditor />)
+    fireEvent.click(screen.getByRole('button', COMPARE))
+    expect(document.querySelector('[data-help="row-diff"]')).not.toBeNull()
+  })
+
+  it('keeps the row itself inert', () => {
+    render(<SubtitleEditor />)
+    const button = screen.getByRole('button', COMPARE)
+    fireEvent.click(button.closest('tr')!)
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(document.querySelector('[data-help="row-changed-dot"]')!)
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('has a German label', async () => {
+    await i18n.changeLanguage('de')
+    render(<SubtitleEditor />)
+    const button = screen.getByRole('button', { name: 'Mit Original vergleichen' })
+    expect(button.textContent).toBe('Vergleichen')
   })
 })
