@@ -42,6 +42,17 @@ export interface TranscriptionResult {
   speaker_mappings: Record<string, string>
   summary: SummaryResult | null
   protocol: ProtocolResult | null
+  /** The saved utterances differ from the stored original; missing means no. */
+  edited?: boolean
+}
+
+export interface OriginalTranscription {
+  utterances: Utterance[]
+}
+
+export interface SaveTranscriptionResponse {
+  status: string
+  edited: boolean
 }
 
 export interface TranscriptionListItem {

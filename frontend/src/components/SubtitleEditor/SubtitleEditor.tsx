@@ -52,6 +52,13 @@ export function SubtitleEditor() {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  // The editor stays mounted when another transcription is opened; its error
+  // belongs to the previous one.
+  const [prevTranscriptionId, setPrevTranscriptionId] = useState(transcriptionId)
+  if (transcriptionId !== prevTranscriptionId) {
+    setPrevTranscriptionId(transcriptionId)
+    setSaveError(null)
+  }
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [searchScope, setSearchScope] = useState<SearchScope>('both')
@@ -390,31 +397,57 @@ export function SubtitleEditor() {
     setDirty(true)
   }, [result, setResult, setDirty])
 
-  const handleRestore = useCallback(async () => {
+  const handleDiscard = useCallback(async () => {
+    if (!transcriptionId || !confirm(t('editor.confirmDiscard'))) return
+    setSaveError(null)
+    try {
+      const saved = await api.getTranscription(transcriptionId)
+      if (useStore.getState().transcriptionId !== transcriptionId) return
+      setResult(saved)
+      setDirty(false)
+    } catch (e) {
+      if (useStore.getState().transcriptionId !== transcriptionId) return
+      setSaveError(e instanceof ApiError && e.message ? e.message : t('editor.discardFailed'))
+    }
+  }, [transcriptionId, setResult, setDirty, t])
+
+  const handleRestoreOriginal = useCallback(async () => {
     if (!transcriptionId || !confirm(t('editor.confirmRestore'))) return
     setSaveError(null)
     try {
-      const original = await api.getTranscription(transcriptionId)
-      setResult(original)
-      setDirty(false)
+      const original = await api.getOriginalTranscription(transcriptionId)
+      const current = useStore.getState().transcriptionResult
+      if (!current || current.id !== transcriptionId) return
+      setResult({ ...current, utterances: original.utterances })
+      // When the saved version is the original, loading it leaves nothing unsaved
+      setDirty(current.edited === true)
+      setActiveView('original')
     } catch (e) {
+      if (useStore.getState().transcriptionId !== transcriptionId) return
       setSaveError(e instanceof ApiError && e.message ? e.message : t('editor.restoreFailed'))
     }
-  }, [transcriptionId, setResult, setDirty, t])
+  }, [transcriptionId, setResult, setDirty, setActiveView, t])
 
   const handleSave = async () => {
     if (!transcriptionId || !result) return
     setSaving(true)
     setSaveError(null)
     try {
-      await api.saveTranscription(transcriptionId, result.utterances)
+      const saved = await api.saveTranscription(transcriptionId, result.utterances)
+      const current = useStore.getState().transcriptionResult
+      // Another transcription may have been opened while this one was saving
+      if (current?.id !== transcriptionId) return
+      setResult({ ...current, edited: saved.edited })
       setDirty(false)
       if (refinementMetadata) {
         // Staleness is decided server-side from the saved texts; refresh it so
         // the badge appears without a reload.
-        api.getRefinement(transcriptionId).then((r) => setRefinementStale(r.stale)).catch(() => {})
+        api.getRefinement(transcriptionId).then((r) => {
+          if (useStore.getState().transcriptionId === transcriptionId) setRefinementStale(r.stale)
+        }).catch(() => {})
       }
     } catch (e) {
+      if (useStore.getState().transcriptionId !== transcriptionId) return
       setSaveError(e instanceof ApiError && e.message ? e.message : t('editor.saveFailed'))
     } finally {
       setSaving(false)
@@ -591,25 +624,35 @@ export function SubtitleEditor() {
           >
             {t('editor.speakerNames')}
           </button>
+          {saveError && (
+            <span role="alert" className="text-xs text-red-400">{saveError}</span>
+          )}
           {dirty && (
-            <>
-              {saveError && (
-                <span role="alert" className="text-xs text-red-400">{saveError}</span>
-              )}
-              <button
-                onClick={handleRestore}
-                className="px-3 py-1 text-gray-400 text-xs rounded border border-gray-600 hover:text-white hover:border-gray-400"
-              >
-                {t('editor.restoreOriginal')}
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-500 disabled:opacity-50"
-              >
-                {saving ? t('common.loading') : t('editor.saveChanges')}
-              </button>
-            </>
+            <button
+              onClick={handleDiscard}
+              disabled={saving}
+              className="px-3 py-1 text-gray-400 text-xs rounded border border-gray-600 hover:text-white hover:border-gray-400 disabled:opacity-50"
+            >
+              {t('editor.discardChanges')}
+            </button>
+          )}
+          {result?.edited && (
+            <button
+              onClick={handleRestoreOriginal}
+              disabled={saving}
+              className="px-3 py-1 text-gray-400 text-xs rounded border border-gray-600 hover:text-white hover:border-gray-400 disabled:opacity-50"
+            >
+              {t('editor.restoreOriginal')}
+            </button>
+          )}
+          {dirty && (
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-500 disabled:opacity-50"
+            >
+              {saving ? t('common.loading') : t('editor.saveChanges')}
+            </button>
           )}
         </div>
       </div>

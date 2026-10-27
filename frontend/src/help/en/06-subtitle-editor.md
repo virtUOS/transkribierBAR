@@ -52,7 +52,11 @@ Below the player, **Download recording** downloads the recording. For videos, **
 
 ## Saving
 
-As soon as you change something, the buttons **Save changes** and **Restore original** appear above the table. Saving replaces the previously saved version on the server. After a prompt, **Restore original** discards all changes since the last save and reloads the saved version. transkribierBAR does not keep an earlier version after you save.
+As soon as you change something, the buttons **Discard changes** and **Save changes** appear above the table. Saving replaces the previously saved version on the server. After a prompt, **Discard changes** discards all changes since the last save and reloads the saved version.
+
+transkribierBAR also keeps the transcription as the speech recognition delivered it. Saving never changes this original. As soon as the saved version differs from it, the button **Restore original** appears. After a prompt, it loads this original into the editor: the text, times and speaker of every row. If the **Refined** or **Translated** view is shown, the editor switches to **Original**. Until you click **Save changes**, the restored original is an unsaved change like any other: the saved version stays on the server, and **Discard changes** brings it back. The names from the **Speaker Names** panel stay. A refinement, translation or analysis stays as well. Whether it counts as out of date afterwards depends on the saved text, as after any other change. The original is deleted together with the transcription.
+
+For a transcription that already existed before transkribierBAR began keeping the original, the original is the version that was saved at that point, including any changes saved before.
 
 If you switch to a format tab such as **SRT**, your changes are kept, and the format already shows them.
 

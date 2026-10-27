@@ -1,6 +1,7 @@
 import type {
   FileInfo, TranscriptionSettings, TranscriptionStatus,
   TranscriptionResult, TranscriptionListItem, ConfigResponse,
+  OriginalTranscription, SaveTranscriptionResponse,
   RefinementResult,
   AnalysisTemplate, AnalysisGenerateRequest, AnalysisListItem,
   TranscriptionPreset, TranscriptionPresetCreate,
@@ -96,6 +97,7 @@ export const api = {
 
   getStatus: (id: string) => request<TranscriptionStatus>(`/api/status/${id}`),
   getTranscription: (id: string) => request<TranscriptionResult>(`/api/transcription/${id}`),
+  getOriginalTranscription: (id: string) => request<OriginalTranscription>(`/api/transcription/${id}/original`),
 
   exportTranscription: async (id: string, format: string): Promise<string> => {
     const response = await fetch(`${BASE}/api/transcription/${id}/export/${format}`)
@@ -104,7 +106,7 @@ export const api = {
   },
 
   saveTranscription: (id: string, utterances: import('./types').Utterance[]) =>
-    request<{ status: string }>(`/api/transcription/${id}`, {
+    request<SaveTranscriptionResponse>(`/api/transcription/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ utterances }),
     }),

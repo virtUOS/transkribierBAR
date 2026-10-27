@@ -204,10 +204,12 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
         if speakers:
             inc(diarization_speakers_total, str(min(len(speakers), 20)))
 
+        result_json = json.dumps([u.model_dump() for u in result.utterances])
         async with get_db() as db:
             cursor = await db.execute(
-                """UPDATE transcriptions SET status = ?, result_json = ?, completed_at = ? WHERE id = ?""",
-                ("completed", json.dumps([u.model_dump() for u in result.utterances]),
+                """UPDATE transcriptions SET status = ?, result_json = ?, original_result_json = ?,
+                   completed_at = ? WHERE id = ?""",
+                ("completed", result_json, result_json,
                  datetime.now(timezone.utc).isoformat(), transcription_id),
             )
             await db.commit()
@@ -287,6 +289,17 @@ async def get_status(transcription_id: str, user: UserInfo = Depends(get_current
     )
 
 
+def _differs_from_original(result_json: str | None, original_json: str | None) -> bool:
+    """Whether the saved version differs from the stored ASR result.
+
+    Without a stored original (a row that never had a result) nothing counts
+    as edited. Compared as parsed JSON, so serialization differences don't count.
+    """
+    if original_json is None or result_json == original_json:
+        return False
+    return json.loads(result_json or "[]") != json.loads(original_json)
+
+
 @router.get("/api/transcription/{transcription_id}")
 async def get_transcription(transcription_id: str, user: UserInfo = Depends(get_current_user)):
     async with get_db() as db:
@@ -311,6 +324,7 @@ async def get_transcription(transcription_id: str, user: UserInfo = Depends(get_
         "text": " ".join(u.text for u in utterances),
         "language": row["language"],
         "speaker_mappings": speaker_mappings,
+        "edited": _differs_from_original(row["result_json"], row["original_result_json"]),
     }
 
 
@@ -357,25 +371,43 @@ async def export_transcription(transcription_id: str, format_type: str, user: Us
     return Response(content=content, media_type=media_type)
 
 
+@router.get("/api/transcription/{transcription_id}/original")
+async def get_original_transcription(transcription_id: str, user: UserInfo = Depends(get_current_user)):
+    """The ASR result as first stored, untouched by later saves."""
+    async with get_db() as db:
+        cursor = await db.execute(
+            "SELECT original_result_json FROM transcriptions WHERE id = ? AND user_id = ? AND status = 'completed'",
+            (transcription_id, user.id),
+        )
+        row = await cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Transcription not found")
+    if row["original_result_json"] is None:
+        raise HTTPException(status_code=404, detail="Original transcription not available")
+    return {"utterances": [Utterance(**u).model_dump() for u in json.loads(row["original_result_json"])]}
+
+
 @router.put("/api/transcription/{transcription_id}")
 async def update_transcription(transcription_id: str, body: TranscriptionUpdateRequest, user: UserInfo = Depends(get_current_user)):
     async with get_db() as db:
         cursor = await db.execute(
-            "SELECT id FROM transcriptions WHERE id = ? AND user_id = ? AND status = 'completed'",
+            "SELECT original_result_json FROM transcriptions WHERE id = ? AND user_id = ? AND status = 'completed'",
             (transcription_id, user.id),
         )
-        if not await cursor.fetchone():
+        row = await cursor.fetchone()
+        if not row:
             raise HTTPException(status_code=404, detail="Transcription not found")
 
+        new_json = json.dumps([u.model_dump() for u in body.utterances])
         await db.execute(
             "UPDATE transcriptions SET result_json = ? WHERE id = ?",
-            (json.dumps([u.model_dump() for u in body.utterances]), transcription_id),
+            (new_json, transcription_id),
         )
         await db.commit()
 
     inc(edits_saved_total)
 
-    return {"status": "ok"}
+    return {"status": "ok", "edited": _differs_from_original(new_json, row["original_result_json"])}
 
 
 @router.put("/api/transcription/{transcription_id}/speakers")
