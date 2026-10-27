@@ -207,6 +207,8 @@
     "translationWarningLong": "This transcription has {{count}} utterances. Translation may take several minutes.",
     "originalText": "Original",
     "refinedText": "Refined",
+    "compare": "Compare",
+    "compareWithOriginal": "Compare with original",
     "editSpeaker": "Edit speaker name",
     "renameAllSpeaker": "Rename speaker in all utterances",
     "editTimestamp": "Edit timestamp",

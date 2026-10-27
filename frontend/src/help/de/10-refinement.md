@@ -44,7 +44,7 @@ In der Ansicht **Verfeinert** fasst eine Leiste über der Tabelle die Änderunge
 
 1. **Verfeinert** wechselt in die verfeinerte Ansicht, **Original** zurück zum Original.
 2. Die **Zusammenfassung der Änderungen**, mit der Zahl der geänderten Äußerungen. Ein Klick darauf klappt sie auf oder zu. Aufgeklappt beschreibt sie in Worten, was das Sprachmodell geändert hat, und nennt den **Kontext**, falls Sie einen angegeben haben.
-3. Eine geänderte Zeile: Sie hat einen bernsteinfarbenen Strich am linken Rand und auf größeren Bildschirmen einen Punkt neben der Zeilennummer. Ein Klick auf den Punkt zeigt **Original** und **Verfeinert** nebeneinander (nur auf größeren Bildschirmen), wie hier unter der ersten Zeile.
+3. Eine geänderte Zeile: Sie hat einen bernsteinfarbenen Strich am linken Rand, auf größeren Bildschirmen einen Punkt neben der Zeilennummer und neben dem Text die Schaltfläche **Vergleichen**. **Vergleichen** zeigt **Original** und **Verfeinert** nebeneinander unter der Zeile, wie hier unter der geänderten Zeile. Ein erneuter Klick schließt den Vergleich.
 
 Die Ansicht ist schreibgeschützt. Wollen Sie Text selbst ändern, tun Sie das im Original.
 

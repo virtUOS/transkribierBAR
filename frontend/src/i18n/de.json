@@ -207,6 +207,8 @@
     "translationWarningLong": "Diese Transkription hat {{count}} Äußerungen. Die Übersetzung kann mehrere Minuten dauern.",
     "originalText": "Original",
     "refinedText": "Verfeinert",
+    "compare": "Vergleichen",
+    "compareWithOriginal": "Mit Original vergleichen",
     "editSpeaker": "Namen der sprechenden Person bearbeiten",
     "renameAllSpeaker": "Diese Person in allen Äußerungen umbenennen",
     "editTimestamp": "Zeitstempel bearbeiten",
