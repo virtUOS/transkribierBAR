@@ -463,3 +463,121 @@ async def test_init_db_gives_never_expiring_tokens_an_expiry(monkeypatch):
 
     await init_db(db_path)
     assert await expiries() == after_first
+
+
+@pytest.mark.asyncio
+async def test_list_tokens_includes_expiry_warning():
+    from datetime import datetime, timedelta, timezone
+
+    fmt = "%Y-%m-%d %H:%M:%S"
+    now = datetime.now(timezone.utc)
+    async with get_db() as db:
+        await _seed_user(db)
+        await db.execute(
+            "INSERT INTO api_tokens (id, user_id, name, prefix, token_hash, created_at, expires_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                "soon-id", "u1", "soon", "tw_soon", "h",
+                (now - timedelta(days=80)).strftime(fmt),
+                (now + timedelta(days=13)).strftime(fmt),
+            ),
+        )
+        await db.commit()
+        # Fresh 90-day token: nothing to warn about yet
+        await create_token(db, user_id="u1", name="fresh", expires_in_days=90)
+        # Fresh 10-day token: only the 3-day threshold is relevant
+        await create_token(db, user_id="u1", name="fresh-10", expires_in_days=10)
+        tokens = await list_tokens(db, user_id="u1")
+
+    by_name = {t["name"]: t["expiry_warning"] for t in tokens}
+    assert by_name == {"soon": "soon", "fresh": None, "fresh-10": None}
+
+
+@pytest.mark.asyncio
+async def test_cleanup_deletes_token_with_expiry_notices():
+    from datetime import datetime, timedelta, timezone
+
+    fmt = "%Y-%m-%d %H:%M:%S"
+    now = datetime.now(timezone.utc)
+    async with get_db() as db:
+        await _seed_user(db)
+        await db.execute(
+            "INSERT INTO api_tokens (id, user_id, name, prefix, token_hash, created_at, expires_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                "old-id", "u1", "old", "tw_old", "h",
+                (now - timedelta(days=190)).strftime(fmt),
+                (now - timedelta(days=100)).strftime(fmt),
+            ),
+        )
+        await db.execute(
+            "INSERT INTO api_token_expiry_notices (token_id, days_before) VALUES (?, ?)",
+            ("old-id", 14),
+        )
+        await db.commit()
+
+        deleted = await cleanup_stale_tokens(db)
+
+        tokens = await (await db.execute("SELECT id FROM api_tokens")).fetchall()
+        notices = await (
+            await db.execute("SELECT token_id FROM api_token_expiry_notices")
+        ).fetchall()
+    assert deleted == 1
+    assert tokens == []
+    assert notices == []
+
+
+async def _insert_dev_token(token_id: str, name: str, *, created_days: float, expires_days: float):
+    """Insert a token of the DEV_MODE user, timed relative to now."""
+    from datetime import datetime, timedelta, timezone
+
+    fmt = "%Y-%m-%d %H:%M:%S"
+    now = datetime.now(timezone.utc)
+    async with get_db() as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO users (id, email) VALUES (?, ?)", ("dev-user", "dev@localhost"),
+        )
+        await db.execute(
+            "INSERT INTO api_tokens (id, user_id, name, prefix, token_hash, created_at, expires_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                token_id, "dev-user", name, f"tw_{token_id}", f"hash-{token_id}",
+                (now + timedelta(days=created_days)).strftime(fmt),
+                (now + timedelta(days=expires_days)).strftime(fmt),
+            ),
+        )
+        await db.commit()
+
+
+@pytest.mark.asyncio
+async def test_list_endpoint_items_carry_expiry_warning(monkeypatch):
+    monkeypatch.setattr(config_module.settings, "ENABLE_API_TOKENS", True)
+    monkeypatch.setattr(config_module.settings, "DEV_MODE", True)
+    await _insert_dev_token("soon", "soon", created_days=-80, expires_days=13)
+    await _insert_dev_token("gone", "gone", created_days=-91, expires_days=-1)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        await c.post("/api/tokens", json={"name": "fresh", "expires_in_days": 90})
+        r = await c.get("/api/tokens")
+
+    assert r.status_code == 200
+    assert {i["name"]: i["expiry_warning"] for i in r.json()} == {
+        "soon": "soon", "gone": "expired", "fresh": None,
+    }
+
+
+@pytest.mark.asyncio
+async def test_revoking_an_expired_token_clears_its_warning(monkeypatch):
+    monkeypatch.setattr(config_module.settings, "ENABLE_API_TOKENS", True)
+    monkeypatch.setattr(config_module.settings, "DEV_MODE", True)
+    await _insert_dev_token("gone", "gone", created_days=-91, expires_days=-1)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        before = (await c.get("/api/tokens")).json()
+        r = await c.delete("/api/tokens/gone")
+        after = (await c.get("/api/tokens")).json()
+
+    assert [(i["expiry_warning"], i["revoked_at"]) for i in before] == [("expired", None)]
+    assert r.status_code == 204
+    assert after[0]["revoked_at"] is not None
+    assert after[0]["expiry_warning"] is None

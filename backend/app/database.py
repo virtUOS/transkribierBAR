@@ -132,6 +132,13 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash);
 
+CREATE TABLE IF NOT EXISTS api_token_expiry_notices (
+    token_id TEXT NOT NULL REFERENCES api_tokens(id) ON DELETE CASCADE,
+    days_before INTEGER NOT NULL,
+    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (token_id, days_before)
+);
+
 CREATE TABLE IF NOT EXISTS invitations (
     id TEXT PRIMARY KEY,
     email TEXT NOT NULL,

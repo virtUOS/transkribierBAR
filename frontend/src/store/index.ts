@@ -72,6 +72,8 @@ interface AppState {
   setRefinementPresets: (presets: RefinementPreset[]) => void
   setBundles: (bundles: PresetBundle[]) => void
   setActiveBundleId: (id: string | null) => void
+  tokenAttention: boolean
+  setTokenAttention: (value: boolean) => void
   helpOpen: boolean
   helpInitialSection: string | null
   setHelpOpen: (open: boolean, initialSection?: string | null) => void
@@ -216,6 +218,8 @@ export const useStore = create<AppState>((set, get) => ({
   setRefinementPresets: (presets) => set({ refinementPresets: presets }),
   setBundles: (bundles) => set({ bundles }),
   setActiveBundleId: (id) => set({ activeBundleId: id }),
+  tokenAttention: false,
+  setTokenAttention: (value) => set({ tokenAttention: value }),
   helpOpen: false,
   helpInitialSection: null,
   setHelpOpen: (open, initialSection) =>

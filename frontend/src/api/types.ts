@@ -280,6 +280,7 @@ export interface ApiToken {
   expires_at: string | null
   last_used_at: string | null
   revoked_at: string | null
+  expiry_warning?: 'soon' | 'expired' | null
 }
 
 export interface ApiTokenCreateRequest {

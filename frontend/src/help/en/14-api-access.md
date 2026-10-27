@@ -24,9 +24,11 @@ The **API tokens** section lists your tokens.
 
 1. **Create token** opens the dialog described above.
 2. A token with its name, its first characters followed by "…", its status (**Active**, **Expired** or **Revoked**), its expiry date and, once it has been used, when it was last used.
-3. **Revoke**, next to an active token, revokes it. From then on, the server rejects every new request with it.
+3. **Revoke**, next to an active or expired token, revokes it. From then on, the server rejects every new request with it.
 
 Expired and revoked tokens stay in the list, shown faded. They are removed from it automatically, revoked ones after 30 days and expired ones after 90 days.
+
+Before a token expires, a notice above the list names it, and the **Settings** button in the header shows an orange dot. The notice appears 14 days before the expiry, for a token created for only a short time 3 days or 1 day before, and it stays for 14 days after a token has expired. A token valid for 1 day gets a notice only once it has expired. Revoking a token removes its notice, even after the token has expired; once no notice is left, the dot disappears as well. A token cannot be extended: create a new one and replace the old one in your scripts. If this service is set up to send email, you also receive reminders at the email address of your login, 14, 3 and 1 day before a token expires; a token created for only a short time skips the early ones, and a token valid for 1 day gets none.
 
 ## Authentication
 

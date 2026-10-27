@@ -58,6 +58,9 @@
       "revoking": "Revoking…",
       "creating": "Creating…",
       "expiresOnTmpl": "expires {{date}}",
+      "expiringSoonTmpl": "\"{{name}}\" expires on {{date}}.",
+      "expiredTmpl": "\"{{name}}\" expired on {{date}}.",
+      "expiryNote": "Tokens cannot be extended. Create a new token and replace the old one in your scripts.",
       "lastUsedTmpl": "last used {{date}}",
       "empty": "No API tokens yet. Create one to get started.",
       "errors": {
@@ -476,6 +479,7 @@
     "newRecording": "Record",
     "presets": "Presets",
     "settings": "Settings",
+    "settingsAttention": "An API token expires soon or has expired",
     "menu": "Menu"
   },
   "common": {

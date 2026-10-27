@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { api } from '../api/client'
 import { useStore } from '../store'
 import { allowNextUnload } from '../hooks/useBeforeUnloadWarning'
+import { tokensNeedingAttention } from '../utils/tokenExpiry'
 import { leaveMessages } from '../utils/leaveMessages'
 
 export function Header() {
   const { t, i18n } = useTranslation()
   const config = useStore((s) => s.config)
+  const tokenAttention = useStore((s) => s.tokenAttention)
+  const tokensEnabled = !!config?.api_tokens_enabled
   const [burgerOpen, setBurgerOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -52,6 +56,18 @@ export function Header() {
   }
 
   useEffect(() => {
+    if (!tokensEnabled) return
+    let cancelled = false
+    api.listApiTokens().then(
+      (tokens) => {
+        if (!cancelled) useStore.getState().setTokenAttention(tokensNeedingAttention(tokens).length > 0)
+      },
+      () => {},
+    )
+    return () => { cancelled = true }
+  }, [tokensEnabled])
+
+  useEffect(() => {
     if (!burgerOpen) return
     const onMouseDown = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -71,6 +87,19 @@ export function Header() {
 
   const buttonClass = 'text-sm text-gray-300 hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500'
   const logoutButtonClass = 'text-sm text-red-400 hover:text-red-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500'
+
+  const settingsLabel = (
+    <>
+      {t('nav.settings')}
+      {tokenAttention && (
+        <>
+          <span aria-hidden="true" className="ml-1.5 inline-block h-2 w-2 rounded-full bg-orange-400" />
+          <span className="sr-only">{t('nav.settingsAttention')}</span>
+        </>
+      )}
+    </>
+  )
+  const settingsTitle = tokenAttention ? t('nav.settingsAttention') : undefined
 
   return (
     <header className="relative flex items-center justify-between gap-2 px-6 py-3 bg-gray-900 border-b border-gray-700">
@@ -97,8 +126,8 @@ export function Header() {
           {t('nav.presets')}
         </button>
         {config?.api_tokens_enabled && (
-          <button data-help="nav-settings" onClick={openSettings} className={buttonClass}>
-            {t('nav.settings')}
+          <button data-help="nav-settings" onClick={openSettings} title={settingsTitle} className={buttonClass}>
+            {settingsLabel}
           </button>
         )}
         <button
@@ -118,18 +147,27 @@ export function Header() {
 
       {/* Mobile: burger trigger + dropdown */}
       <div className="md:hidden" ref={containerRef}>
+        {/* The Settings item is inside the closed menu, so this button carries the mark
+            too. Named by its text, not aria-label, so screen readers hear the mark. */}
         <button
           type="button"
           onClick={() => setBurgerOpen((open) => !open)}
-          aria-label={t('nav.menu')}
+          title={settingsTitle}
           aria-expanded={burgerOpen}
           aria-haspopup="menu"
           aria-controls="header-mobile-menu"
-          className={buttonClass}
+          className={`${buttonClass} relative`}
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M4 6h16M4 12h16M4 18h16" />
           </svg>
+          <span className="sr-only">{t('nav.menu')}</span>
+          {tokenAttention && (
+            <>
+              <span aria-hidden="true" className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-orange-400" />
+              <span className="sr-only">{t('nav.settingsAttention')}</span>
+            </>
+          )}
         </button>
         {burgerOpen && (
           <div
@@ -158,9 +196,10 @@ export function Header() {
                 type="button"
                 role="menuitem"
                 onClick={openSettings}
+                title={settingsTitle}
                 className={`${buttonClass} text-left px-4 py-2`}
               >
-                {t('nav.settings')}
+                {settingsLabel}
               </button>
             )}
             <button

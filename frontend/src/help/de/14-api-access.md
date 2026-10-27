@@ -24,9 +24,11 @@ Der Bereich **API-Tokens** listet Ihre Tokens auf.
 
 1. **Token erstellen** öffnet den oben beschriebenen Dialog.
 2. Ein Token mit seinem Namen, seinen ersten Zeichen mit angehängtem „…“, dem Status (**Aktiv**, **Abgelaufen** oder **Widerrufen**), seinem Ablaufdatum und, sobald er verwendet wurde, dem Zeitpunkt der letzten Verwendung.
-3. **Widerrufen** neben einem aktiven Token widerruft ihn. Ab dann weist der Server jede neue Anfrage mit ihm ab.
+3. **Widerrufen** neben einem aktiven oder abgelaufenen Token widerruft ihn. Ab dann weist der Server jede neue Anfrage mit ihm ab.
 
 Abgelaufene und widerrufene Tokens bleiben abgeblendet in der Liste. Sie werden automatisch daraus entfernt, widerrufene nach 30 Tagen und abgelaufene nach 90 Tagen.
+
+Bevor ein Token abläuft, nennt ihn ein Hinweis über der Liste, und die Schaltfläche **Einstellungen** in der Kopfzeile zeigt einen orangen Punkt. Der Hinweis erscheint 14 Tage vor dem Ablauf, bei einem nur kurz gültigen Token 3 Tage oder 1 Tag vorher, und er bleibt 14 Tage nach dem Ablauf stehen. Für einen Token, der 1 Tag gilt, erscheint der Hinweis erst nach dem Ablauf. Widerrufen Sie einen Token, verschwindet sein Hinweis, auch wenn der Token schon abgelaufen ist; ist kein Hinweis mehr übrig, verschwindet auch der Punkt. Ein Token lässt sich nicht verlängern: Erstellen Sie einen neuen und ersetzen Sie den alten in Ihren Skripten. Ist dieser Dienst für den Versand von E-Mails eingerichtet, erhalten Sie außerdem Erinnerungen an die E-Mail-Adresse Ihres Logins, 14, 3 und 1 Tag vor dem Ablauf; bei einem nur kurz gültigen Token entfallen die frühen, und ein Token, der 1 Tag gilt, erhält keine.
 
 ## Authentifizierung
 
