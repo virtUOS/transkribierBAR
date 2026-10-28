@@ -78,7 +78,7 @@ Die Antwort enthält die `id` der Transkription (`TRANSCRIPTION_ID`) und den Sta
 | `initial_prompt` | Optionaler Kontext für die Transkription. |
 | `hotwords` | Optionale Fachbegriffe, durch Kommas getrennt. |
 
-> **Das Modell.** Diese Installation bietet nur das Modell {{default_model}} an. Lassen Sie `model` weg, wird das Standardmodell {{default_model}} dieser Installation verwendet. Ein Modell, das diese Installation nicht anbietet, wird mit Status 422 abgelehnt; die Meldung nennt das abgelehnte Modell.
+> **Das Modell.** `model` nennt eines der Modelle, die diese Installation anbietet; das Feld **Qualität** bei **Hochladen** führt sie mit ihren Namen in Klammern auf. Lassen Sie `model` weg, wird das Standardmodell {{default_model}} dieser Installation verwendet. Ein Modell, das diese Installation nicht anbietet, wird mit Status 422 abgelehnt; die Meldung nennt das abgelehnte Modell.
 
 **3. Auf das Ergebnis warten.** Fragen Sie den Status ab, bis er `completed` oder `failed` ist:
 

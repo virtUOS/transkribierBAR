@@ -123,7 +123,7 @@ async function main(): Promise<void> {
     DEV_MODE: 'true',
     DATABASE_PATH: dbPath,
     TEMP_PATH: join(tempDir, 'files'),
-    WHISPER_MODELS: 'large-v3-turbo',
+    WHISPER_MODELS: 'large-v3-turbo,large-v3',
     DEFAULT_WHISPER_MODEL: 'large-v3-turbo',
     LLM_PROVIDER: 'openai',
     LLM_MODEL: 'demo',
