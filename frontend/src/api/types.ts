@@ -38,7 +38,10 @@ export interface TranscriptionResult {
   status: string
   utterances: Utterance[]
   text: string
+  /** The requested language; null means Auto-detect. */
   language: string | null
+  /** The language the speech recognition reported; missing or null for older transcriptions. */
+  detected_language?: string | null
   speaker_mappings: Record<string, string>
   summary: SummaryResult | null
   protocol: ProtocolResult | null

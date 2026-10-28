@@ -96,7 +96,7 @@ Statt die Abfrage zu wiederholen, können Sie den WebSocket aus dem Abschnitt �
 curl -H "Authorization: Bearer tw_…" https://transcription.uni-osnabrueck.de/api/transcription/TRANSCRIPTION_ID
 ```
 
-Die Antwort enthält die Äußerungen (`utterances`, jeweils mit `start` und `end` in Millisekunden, `text` und `speaker`), den gesamten Text (`text`), die Sprache (`language`) und die Namen der Sprechenden (`speaker_mappings`). Für eine fertige Datei hängen Sie stattdessen `/export/txt`, `/export/srt`, `/export/vtt` oder `/export/json` an die Adresse an.
+Die Antwort enthält die Äußerungen (`utterances`, jeweils mit `start` und `end` in Millisekunden, `text` und `speaker`), den gesamten Text (`text`), die angeforderte Sprache (`language`, `null` bei automatischer Erkennung), die von der Spracherkennung gemeldete Sprache (`detected_language`, `null`, wenn keine gespeichert ist) und die Namen der Sprechenden (`speaker_mappings`). Für eine fertige Datei hängen Sie stattdessen `/export/txt`, `/export/srt`, `/export/vtt` oder `/export/json` an die Adresse an.
 
 ## Grenzen
 

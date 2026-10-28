@@ -16,12 +16,15 @@ interface TranscriptionProgressCardProps {
   pendingTranscription?: boolean
   submitError?: string | null
   onTryAgain?: () => void
+  /** The language was set to Auto-detect; a failure the speech recognition reported then suggests choosing it. */
+  autoLanguage?: boolean
 }
 
 export function TranscriptionProgressCard({
   pendingTranscription = false,
   submitError = null,
   onTryAgain,
+  autoLanguage = false,
 }: TranscriptionProgressCardProps) {
   const { t } = useTranslation()
   const transcriptionId = useStore((s) => s.transcriptionId)
@@ -214,6 +217,9 @@ export function TranscriptionProgressCard({
                 <p className="text-red-400/80 text-xs mt-1 break-words">
                   {t('transcription.failedDetail', { message: errorMessage })}
                 </p>
+              )}
+              {autoLanguage && failure?.code === 'asr_failed' && (
+                <p className="text-red-400/80 text-xs mt-1">{t('transcription.autoLanguageHint')}</p>
               )}
             </div>
           </div>

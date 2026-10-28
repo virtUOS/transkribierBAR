@@ -170,6 +170,37 @@ async def test_completion_stores_the_asr_result_as_the_original(mock_asr):
     ]
 
 
+@pytest.mark.asyncio
+async def test_completion_stores_the_detected_language(mock_asr):
+    from app.database import get_db
+    from app.models import TranscriptionSettings as TranscriptionSettingsModel
+    from app.routers.transcription import _run_transcription
+
+    mock_asr.get_result.return_value = TranscriptionResult(
+        id="asr-job-123", status="completed",
+        utterances=[Utterance(start=0, end=1000, text="Hello")], text="Hello", language="yo",
+    )
+    async with get_db() as db:
+        await db.execute(
+            "INSERT INTO transcriptions (id, asr_backend, status) VALUES (?, ?, ?)",
+            ("txn-detected", "whisperx", "pending"),
+        )
+        await db.commit()
+    req = TranscriptionSettingsModel(file_id="file-1", language=None, model="large-v3")
+
+    with patch("app.routers.transcription.get_asr_backend", return_value=mock_asr), \
+         patch("app.services.llm.get_llm_provider", return_value=None):
+        await _run_transcription("txn-detected", "/nonexistent/audio.mp3", req, submitted_at=0.0)
+
+    async with get_db() as db:
+        cursor = await db.execute(
+            "SELECT language, detected_language FROM transcriptions WHERE id = ?", ("txn-detected",),
+        )
+        row = await cursor.fetchone()
+    assert row["language"] is None
+    assert row["detected_language"] == "yo"
+
+
 async def _insert_file(file_path, mp3_path):
     from app.database import get_db
     async with get_db() as db:
@@ -352,6 +383,23 @@ async def test_get_transcription_returns_utterances_text_and_mappings():
     assert data["language"] == "en"
     assert [u["text"] for u in data["utterances"]] == ["Hello there", "General Kenobi"]
     assert data["speaker_mappings"] == {"SPEAKER_00": "Obi-Wan"}
+    assert data["detected_language"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_transcription_returns_the_detected_language():
+    from app.database import get_db
+    await _seed("t-get-detected")
+    async with get_db() as db:
+        await db.execute(
+            "UPDATE transcriptions SET language = NULL, detected_language = 'yo' WHERE id = ?",
+            ("t-get-detected",),
+        )
+        await db.commit()
+    async with _client() as client:
+        data = (await client.get("/api/transcription/t-get-detected")).json()
+    assert data["language"] is None
+    assert data["detected_language"] == "yo"
 
 
 @pytest.mark.asyncio

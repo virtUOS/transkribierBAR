@@ -81,6 +81,8 @@
     "success": "Transcription successful!",
     "failed": "Transcription failed",
     "failedDetail": "Error message: {{message}}",
+    "autoLanguageHint": "The language was set to Auto-detect. Choosing the language may help.",
+    "detectedLanguage": "Detected language: {{language}}",
     "errors": {
       "server_restarted": "The server restarted while this transcription was running.",
       "timeout": "The speech recognition did not finish this transcription within the time limit.",

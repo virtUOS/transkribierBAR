@@ -210,8 +210,8 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
         async with get_db() as db:
             cursor = await db.execute(
                 """UPDATE transcriptions SET status = ?, result_json = ?, original_result_json = ?,
-                   completed_at = ? WHERE id = ?""",
-                ("completed", result_json, result_json,
+                   detected_language = ?, completed_at = ? WHERE id = ?""",
+                ("completed", result_json, result_json, result.language,
                  datetime.now(timezone.utc).isoformat(), transcription_id),
             )
             await db.commit()
@@ -325,6 +325,7 @@ async def get_transcription(transcription_id: str, user: UserInfo = Depends(get_
         "utterances": [u.model_dump() for u in utterances],
         "text": " ".join(u.text for u in utterances),
         "language": row["language"],
+        "detected_language": row["detected_language"],
         "speaker_mappings": speaker_mappings,
         "edited": _differs_from_original(row["result_json"], row["original_result_json"]),
     }
