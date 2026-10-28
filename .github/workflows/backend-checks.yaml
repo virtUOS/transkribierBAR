@@ -63,4 +63,5 @@ jobs:
 
       - name: Test
         working-directory: backend
-        run: pytest
+        # Fails below the coverage floor in backend/.coveragerc.
+        run: pytest --cov
