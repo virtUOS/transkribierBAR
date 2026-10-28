@@ -15,7 +15,7 @@ Die Gruppe **Transkription** enthält zwei Felder.
 
 **Sprache für die Transkription:** Voreingestellt ist **Automatisch erkennen**; dann bestimmt die Spracherkennung die Sprache selbst. Kennen Sie die Sprache, wählen Sie sie aus der Liste. Oben stehen Deutsch, Englisch, Spanisch, Französisch und Türkisch, darunter nach einem Trennstrich alle weiteren Sprachen in alphabetischer Reihenfolge.
 
-**Modell:** Das Feld ist schreibgeschützt und zeigt {{default_model}}. Es ist das einzige konfigurierte Modell, daher gibt es nichts auszuwählen. Jede Transkription verwendet es.
+**Qualität:** Die Liste bietet die konfigurierten Modelle an, jeweils mit einer kurzen Beschreibung und dem Namen, zum Beispiel **Ausgewogen (large-v3-turbo)** und **Beste Qualität (large-v3)**. Voreingestellt ist {{default_model}}. **Beste Qualität** ist das vollständige Modell und braucht deutlich länger; **Ausgewogen** ist das kleinere, schnellere Modell. Bietet Ihre Installation nur ein Modell an, heißt das Feld **Modell**, ist schreibgeschützt und zeigt es an.
 
 ## Sprechende erkennen
 
