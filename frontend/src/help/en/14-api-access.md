@@ -74,7 +74,7 @@ The answer contains the `id` of the transcription (`TRANSCRIPTION_ID`) and the s
 | `file_id` | Required. The `id` from the upload. |
 | `language` | Language code such as `de`. Without this field, the language is detected automatically. |
 | `model` | The model. See the note below. |
-| `min_speakers`, `max_speakers` | Minimum and maximum number of speakers. If at least one of them is greater than 0, speakers are detected. If both are missing or 0, speakers are not detected. |
+| `min_speakers`, `max_speakers` | Minimum and maximum number of speakers. If at least one of them is greater than 0, speakers are detected. If both are missing or 0, speakers are not detected. Negative values, or a maximum below the minimum, are rejected. |
 | `initial_prompt` | Optional context for the transcription. |
 | `hotwords` | Optional technical terms, separated by commas. |
 

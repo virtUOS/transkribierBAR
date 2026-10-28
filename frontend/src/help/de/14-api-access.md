@@ -74,7 +74,7 @@ Die Antwort enthält die `id` der Transkription (`TRANSCRIPTION_ID`) und den Sta
 | `file_id` | Pflicht. Die `id` aus dem Upload. |
 | `language` | Sprachcode wie `de`. Ohne dieses Feld wird die Sprache automatisch erkannt. |
 | `model` | Das Modell. Siehe den Hinweis unten. |
-| `min_speakers`, `max_speakers` | Mindest- und Höchstzahl der Sprechenden. Ist mindestens eines davon größer als 0, werden Sprechende erkannt. Fehlen beide oder sind sie 0, werden keine Sprechenden erkannt. |
+| `min_speakers`, `max_speakers` | Mindest- und Höchstzahl der Sprechenden. Ist mindestens eines davon größer als 0, werden Sprechende erkannt. Fehlen beide oder sind sie 0, werden keine Sprechenden erkannt. Negative Werte oder eine Höchstzahl unter der Mindestzahl werden abgelehnt. |
 | `initial_prompt` | Optionaler Kontext für die Transkription. |
 | `hotwords` | Optionale Fachbegriffe, durch Kommas getrennt. |
 

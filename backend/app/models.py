@@ -33,6 +33,14 @@ class TranscriptionSettings(BaseModel):
     initial_prompt: str | None = None
     hotwords: str | None = None
 
+    @model_validator(mode="after")
+    def _check_speaker_bounds(self) -> "TranscriptionSettings":
+        if self.min_speakers < 0 or self.max_speakers < 0:
+            raise ValueError("min_speakers and max_speakers must be 0 or greater")
+        if self.min_speakers > 0 and self.max_speakers > 0 and self.max_speakers < self.min_speakers:
+            raise ValueError("max_speakers must not be lower than min_speakers")
+        return self
+
 
 class TranscriptionStatus(BaseModel):
     id: str
