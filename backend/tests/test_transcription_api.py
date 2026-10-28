@@ -723,6 +723,48 @@ def test_ws_refuses_other_users_transcription(tmp_path):
     assert exc.value.code == 4003
 
 
+def test_ws_refusal_closes_after_releasing_the_db_connection(tmp_path):
+    """The 4003 close is sent after `async with get_db()` has exited (#291).
+
+    A client may stop its event loop as soon as it has the close frame, while
+    aiosqlite's worker thread is still closing the connection.
+    """
+    from contextlib import asynccontextmanager
+    from starlette.testclient import TestClient
+    from starlette.websockets import WebSocket, WebSocketDisconnect
+    import app.routers.transcription as transcription_module
+    _ws_seed(tmp_path, ("t-ws-foreign", {}))
+    open_connections = 0
+    open_at_close: list[int] = []
+    real_get_db = transcription_module.get_db
+
+    @asynccontextmanager
+    async def counting_get_db():
+        nonlocal open_connections
+        async with real_get_db() as db:
+            open_connections += 1
+            try:
+                yield db
+            finally:
+                open_connections -= 1
+
+    real_close = WebSocket.close
+
+    async def recording_close(self, *args, **kwargs):
+        open_at_close.append(open_connections)
+        await real_close(self, *args, **kwargs)
+
+    client = TestClient(app)
+    with patch.object(transcription_module, "get_db", counting_get_db), \
+         patch.object(WebSocket, "close", recording_close):
+        with pytest.raises(WebSocketDisconnect) as exc:
+            with client.websocket_connect("/api/ws/status/t-ws-foreign", headers=INTRUDER) as ws:
+                ws.receive_json()
+    assert exc.value.code == 4003
+    # The first close is the refusal; the handler's `finally` closes once more.
+    assert open_at_close[0] == 0
+
+
 def test_ws_requires_authentication(tmp_path):
     from starlette.testclient import TestClient
     from starlette.websockets import WebSocketDisconnect

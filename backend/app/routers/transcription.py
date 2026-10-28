@@ -634,16 +634,19 @@ async def websocket_status(websocket: WebSocket, transcription_id: str):
             await websocket.close(code=4001, reason="Missing authentication")
             return
 
-        # Verify user owns this transcription
+        # Verify user owns this transcription. The close goes out after the
+        # connection is released: a client may stop its event loop on the close
+        # frame while aiosqlite's worker thread is still closing (#291).
         async with get_db() as db:
             cursor = await db.execute(
                 "SELECT id FROM transcriptions WHERE id = ? AND user_id = ?",
                 (transcription_id, user_id),
             )
-            if not await cursor.fetchone():
-                close_reason = "not_found"
-                await websocket.close(code=4003, reason="Not found")
-                return
+            owned = await cursor.fetchone() is not None
+        if not owned:
+            close_reason = "not_found"
+            await websocket.close(code=4003, reason="Not found")
+            return
 
         while True:
             async with get_db() as db:
