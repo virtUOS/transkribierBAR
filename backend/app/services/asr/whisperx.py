@@ -12,8 +12,9 @@ DEFAULT_READ_TIMEOUT = 600.0
 
 # In-memory cache for WhisperX results. WhisperX is synchronous, so submit() blocks
 # until complete — the result is stored in the DB by _run_transcription() immediately
-# after submit() returns. These dicts are only used during the brief poll loop between
-# submit() returning and _run_transcription() reading get_result().
+# after submit() returns. Entries live between submit() returning and
+# _run_transcription() reading get_result(), which removes them. A job the server
+# rejected keeps its failed status and error until get_result() or a process restart.
 _results: dict[str, TranscriptionResult] = {}
 _statuses: dict[str, str] = {}
 _errors: dict[str, str] = {}
@@ -21,7 +22,7 @@ _errors: dict[str, str] = {}
 
 class WhisperXBackend(ASRBackend):
     def __init__(self):
-        self.base_url = settings.ASR_URL
+        self.base_url = settings.ASR_URL.rstrip("/")
         self.api_key = settings.ASR_API_KEY
 
     async def submit(self, file_path: str, ts: TranscriptionSettings) -> str:
@@ -44,13 +45,9 @@ class WhisperXBackend(ASRBackend):
             _statuses[job_id] = "failed"
             raise
         except httpx.TimeoutException as e:
-            _statuses[job_id] = "failed"
             inc(errors_total, "transcription_timeout", "asr")
             read_timeout = self._timeout_for(ts).read
             raise TimeoutError(f"ASR request exceeded {read_timeout:.0f}s") from e
-        except Exception:
-            _statuses[job_id] = "failed"
-            raise
 
         return job_id
 
@@ -60,8 +57,21 @@ class WhisperXBackend(ASRBackend):
             body = response.json()
         except ValueError:
             body = None
-        if isinstance(body, dict) and body.get("detail"):
-            return str(body["detail"])
+        detail = body.get("detail") if isinstance(body, dict) else None
+        if isinstance(detail, str) and detail:
+            return detail
+        if isinstance(detail, list) and detail:
+            parts = []
+            for item in detail:
+                if not isinstance(item, dict) or not item.get("msg"):
+                    continue
+                loc = item.get("loc")
+                prefix = ""
+                if isinstance(loc, list) and loc:
+                    prefix = ".".join(str(p) for p in loc) + ": "
+                parts.append(f"{prefix}{item['msg']}")
+            if parts:
+                return "; ".join(parts)
         return f"ASR server returned HTTP {response.status_code}"
 
     @staticmethod
@@ -94,6 +104,10 @@ class WhisperXBackend(ASRBackend):
 
     @staticmethod
     def _parse_result(payload: dict) -> TranscriptionResult:
+        segments = payload.get("segments") or []
+        if isinstance(segments, dict):
+            # align=true (and diarization) nest the list: {"segments": [...], "word_segments": [...]}
+            segments = segments.get("segments") or []
         utterances = [
             Utterance(
                 start=int(round((seg.get("start") or 0) * 1000)),
@@ -101,7 +115,7 @@ class WhisperXBackend(ASRBackend):
                 text=(seg.get("text") or "").strip(),
                 speaker=seg.get("speaker"),
             )
-            for seg in payload.get("segments") or []
+            for seg in segments
         ]
         text = payload.get("text") or " ".join(u.text for u in utterances)
         return TranscriptionResult(

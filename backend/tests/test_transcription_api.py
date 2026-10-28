@@ -787,7 +787,10 @@ async def test_transcribe_passes_timeout_and_request_id_to_backend(mock_asr, mon
         file_id = upload_resp.json()["id"]
         with patch("app.routers.transcription.get_asr_backend", return_value=mock_asr):
             resp = await client.post("/api/transcribe", json={"file_id": file_id, "language": "en", "model": "base"})
-            await asyncio.sleep(0.2)
+            for _ in range(200):
+                if mock_asr.submit.await_count:
+                    break
+                await asyncio.sleep(0.01)
     ts = mock_asr.submit.await_args.args[1]
     assert ts.request_id == resp.json()["id"]
     assert ts.job_timeout == 1234.0

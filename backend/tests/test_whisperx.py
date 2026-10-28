@@ -8,10 +8,13 @@ from app.services.asr.whisperx import WhisperXBackend
 
 URL = "http://asr.test/v1/audio/transcriptions"
 
-PAYLOAD = {"text": "Hallo Welt", "language": "de", "segments": [
+SEGMENTS = [
     {"start": 0.0, "end": 1.25, "text": " Hallo ", "speaker": "SPEAKER_00", "words": []},
     {"start": 1.25, "end": 2.5, "text": "Welt"},
-]}
+]
+# With align=true the server nests the list: {"segments": [...], "word_segments": [...]}.
+PAYLOAD = {"text": "Hallo Welt", "language": "de",
+           "segments": {"segments": SEGMENTS, "word_segments": []}}
 
 
 @pytest.fixture
@@ -100,7 +103,7 @@ async def test_result_parsing(backend, audio):
 
 @pytest.mark.asyncio
 async def test_text_fallback_joins_segments(backend, audio):
-    payload = {"segments": PAYLOAD["segments"]}
+    payload = {"segments": PAYLOAD["segments"]}  # nested shape, no text
     with respx.mock:
         respx.post(URL).mock(return_value=httpx.Response(200, json=payload))
         job = await backend.submit(audio, _ts())
@@ -110,7 +113,8 @@ async def test_text_fallback_joins_segments(backend, audio):
 @pytest.mark.asyncio
 async def test_segment_missing_fields_defaults(backend, audio):
     with respx.mock:
-        respx.post(URL).mock(return_value=httpx.Response(200, json={"segments": [{"text": "x"}]}))
+        respx.post(URL).mock(return_value=httpx.Response(
+            200, json={"segments": {"segments": [{"text": "x"}], "word_segments": []}}))
         job = await backend.submit(audio, _ts())
     result = await backend.get_result(job)
     assert [(u.start, u.end, u.text, u.speaker) for u in result.utterances] == [(0, 0, "x", None)]
@@ -164,3 +168,49 @@ async def test_cleanup_is_noop(backend):
     with respx.mock:
         assert await backend.cleanup("x") is None
         assert len(respx.calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_flat_segments_for_silence(backend, audio):
+    with respx.mock:
+        respx.post(URL).mock(return_value=httpx.Response(
+            200, json={"language": "de", "segments": []}))
+        job = await backend.submit(audio, _ts())
+    result = await backend.get_result(job)
+    assert result.utterances == []
+    assert result.text == ""
+
+
+@pytest.mark.asyncio
+async def test_flat_segments_list_still_parsed(backend, audio):
+    with respx.mock:
+        respx.post(URL).mock(return_value=httpx.Response(
+            200, json={"segments": [{"start": 0.0, "end": 1.0, "text": "Hi"}]}))
+        job = await backend.submit(audio, _ts())
+    result = await backend.get_result(job)
+    assert [(u.start, u.end, u.text) for u in result.utterances] == [(0, 1000, "Hi")]
+
+
+@pytest.mark.asyncio
+async def test_http_status_error_list_detail(backend, audio):
+    detail = [
+        {"type": "enum", "loc": ["body", "language"], "msg": "Input should be 'de' or 'en'"},
+        {"type": "missing", "loc": ["body", "file"], "msg": "Field required"},
+    ]
+    with respx.mock:
+        respx.post(URL).mock(return_value=httpx.Response(422, json={"detail": detail}))
+        job = await backend.submit(audio, _ts())
+    status = await backend.get_status(job)
+    assert status.status == "failed"
+    assert status.error == "body.language: Input should be 'de' or 'en'; body.file: Field required"
+
+
+@pytest.mark.asyncio
+async def test_trailing_slash_in_asr_url(monkeypatch, audio):
+    monkeypatch.setattr(settings, "ASR_URL", "http://asr.test/")
+    monkeypatch.setattr(settings, "ASR_API_KEY", "")
+    backend = WhisperXBackend()
+    with respx.mock:
+        route = respx.post(URL).mock(return_value=httpx.Response(200, json=PAYLOAD))
+        await backend.submit(audio, _ts())
+    assert str(route.calls.last.request.url) == "http://asr.test/v1/audio/transcriptions"

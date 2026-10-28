@@ -43,7 +43,7 @@ The application uses a decoupled frontend/backend architecture:
 
 - **Frontend**: React 19 + TypeScript SPA built with Vite, using Zustand for state management and Tailwind CSS for styling.
 - **Backend**: FastAPI (Python, version in `backend/.python-version`) with async SQLite database, serving the built frontend as static files.
-- **ASR**: Pluggable speech recognition backends — [whisperx-api-server](https://github.com/Nyralei/whisperx-api-server) (WhisperX 3.8, one synchronous request per job; the server keeps neither audio nor transcript once it has answered) or [MurmurAI](https://github.com/namastexlabs/murmurai) (asynchronous API; the app deletes the server-side copy of each transcript as soon as it has stored the result, so transcripts on the ASR server do not outlive the app's own retention).
+- **ASR**: Pluggable speech recognition backends — [whisperx-api-server](https://github.com/Nyralei/whisperx-api-server) (WhisperX 3.8, one synchronous request per job; with `RESULT_STORE__ENABLED=false` on the server it keeps neither audio nor transcript once it has answered; the server's default keeps results for an hour) or [MurmurAI](https://github.com/namastexlabs/murmurai) (asynchronous API; the app deletes the server-side copy of each transcript as soon as it has stored the result, so transcripts on the ASR server do not outlive the app's own retention).
 - **LLM**: Pluggable LLM providers — OpenAI-compatible API (OpenAI, vLLM, etc.) or Ollama.
 - **Deployment**: Multi-stage Docker build combining both frontend and backend into a single image.
 
@@ -62,7 +62,7 @@ ASR_BACKEND=murmurai              # or: whisperx
 ASR_URL=http://localhost:8880         # MurmurAI's default port; whisperx-api-server listens on :8000
 ASR_API_KEY=                      # sent as "Authorization: Bearer" to whisperx-api-server, raw to MurmurAI; empty if the server has no key
 ASR_MAX_CONCURRENT=3              # max transcription jobs sent to the ASR backend at once
-ASR_JOB_TIMEOUT_MIN=1800          # fail a job stuck in "processing" after this many seconds
+ASR_JOB_TIMEOUT_MIN=1800          # fail a job stuck in "processing" after this many seconds (for whisperx also the floor of each request's HTTP read timeout)
 ASR_JOB_TIMEOUT_FACTOR=10         # ...or after audio_duration x this, whichever is longer
 
 # ASR Model Configuration
