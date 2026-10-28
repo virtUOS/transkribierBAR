@@ -96,7 +96,7 @@ Instead of repeating the query, you can listen on the WebSocket from the section
 curl -H "Authorization: Bearer tw_…" https://transcription.uni-osnabrueck.de/api/transcription/TRANSCRIPTION_ID
 ```
 
-The answer contains the utterances (`utterances`, each with `start` and `end` in milliseconds, `text` and `speaker`), the complete text (`text`), the language (`language`) and the speaker names (`speaker_mappings`). For a ready-made file, append `/export/txt`, `/export/srt`, `/export/vtt` or `/export/json` to the address instead.
+The answer contains the utterances (`utterances`, each with `start` and `end` in milliseconds, `text` and `speaker`), the complete text (`text`), the requested language (`language`, `null` for automatic detection), the language the speech recognition reported (`detected_language`, `null` if none was recorded) and the speaker names (`speaker_mappings`). For a ready-made file, append `/export/txt`, `/export/srt`, `/export/vtt` or `/export/json` to the address instead.
 
 ## Limits
 

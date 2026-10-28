@@ -81,6 +81,7 @@
     "success": "Transkription erfolgreich!",
     "failed": "Transkription fehlgeschlagen",
     "failedDetail": "Fehlermeldung: {{message}}",
+    "detectedLanguage": "Erkannte Sprache: {{language}}",
     "errors": {
       "server_restarted": "Der Server wurde neu gestartet, während diese Transkription lief.",
       "timeout": "Die Spracherkennung hat diese Transkription nicht innerhalb des Zeitlimits abgeschlossen.",

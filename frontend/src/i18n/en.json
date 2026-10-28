@@ -81,6 +81,7 @@
     "success": "Transcription successful!",
     "failed": "Transcription failed",
     "failedDetail": "Error message: {{message}}",
+    "detectedLanguage": "Detected language: {{language}}",
     "errors": {
       "server_restarted": "The server restarted while this transcription was running.",
       "timeout": "The speech recognition did not finish this transcription within the time limit.",

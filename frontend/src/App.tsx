@@ -13,6 +13,7 @@ import { api } from './api/client'
 import { useBeforeUnloadWarning } from './hooks/useBeforeUnloadWarning'
 import { LoadingFallback } from './components/LoadingFallback'
 import { ChunkErrorBoundary } from './components/ChunkErrorBoundary'
+import { DetectedLanguage } from './components/DetectedLanguage'
 import { InviteLanding } from './components/InviteLanding'
 import { resolveModel } from './utils/models'
 import { leaveMessages } from './utils/leaveMessages'
@@ -658,6 +659,7 @@ function MainApp() {
               )}
             </h1>
           )}
+          <DetectedLanguage requested={transcriptionResult?.language} detected={transcriptionResult?.detected_language} />
           <DetailActions />
           <TranscriptionProgressCard />
           {pipelineStatus && (

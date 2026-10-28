@@ -107,7 +107,7 @@ async def test_responses_and_exports_do_not_carry_the_original():
         await _insert(client)
         await _put(client, EDITED)
         body = (await _get(client)).json()
-        assert set(body) == {"id", "status", "utterances", "text", "language", "speaker_mappings", "edited"}
+        assert set(body) == {"id", "status", "utterances", "text", "language", "detected_language", "speaker_mappings", "edited"}
         for fmt in ("json", "txt", "srt", "vtt"):
             text = (await client.get(f"/api/transcription/{TXN}/export/{fmt}", headers=H)).text
             assert "Goodbye world" in text
