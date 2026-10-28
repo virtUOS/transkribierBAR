@@ -177,6 +177,7 @@ function MainApp() {
   const transcriptionStatus = useStore((s) => s.transcriptionStatus)
   const transcriptionTitle = useStore((s) => s.transcriptionTitle)
   const transcriptionResult = useStore((s) => s.transcriptionResult)
+  const transcriptionHistory = useStore((s) => s.transcriptionHistory)
   const activeTab = useStore((s) => s.activeTab)
   const helpOpen = useStore((s) => s.helpOpen)
   const [playerCollapsed, setPlayerCollapsed] = useState(false)
@@ -572,6 +573,7 @@ function MainApp() {
                 pendingTranscription={pendingTranscription}
                 submitError={submitError}
                 onTryAgain={handleTryAgain}
+                autoLanguage={submittedSummary?.language === null}
               />
             </>
           ) : (
@@ -613,6 +615,7 @@ function MainApp() {
                 pendingTranscription={pendingTranscription}
                 submitError={submitError}
                 onTryAgain={handleTryAgain}
+                autoLanguage={submittedSummary?.language === null}
               />
             </>
           ) : (
@@ -661,7 +664,9 @@ function MainApp() {
           )}
           <DetectedLanguage requested={transcriptionResult?.language} detected={transcriptionResult?.detected_language} />
           <DetailActions />
-          <TranscriptionProgressCard />
+          <TranscriptionProgressCard
+            autoLanguage={transcriptionHistory.find((h) => h.id === transcriptionId)?.language === null}
+          />
           {pipelineStatus && (
             <div className={`mx-6 my-2 px-4 py-2 rounded-lg flex items-center gap-3 ${
               pipelineStatus.step === 'refine' ? 'bg-amber-900/30 border border-amber-700/50' :

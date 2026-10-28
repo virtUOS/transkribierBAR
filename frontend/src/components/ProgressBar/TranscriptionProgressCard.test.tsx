@@ -63,6 +63,37 @@ describe('TranscriptionProgressCard failure reason', () => {
     expect(screen.queryByText(new RegExp(RESTART_TEXT))).toBeNull()
   })
 
+  // The German hint, failing if it has no German text.
+  function germanHint(): string {
+    const hint = i18n.getResource('de', 'translation', 'transcription.autoLanguageHint')
+    expect(hint).toEqual(expect.any(String))
+    return hint
+  }
+
+  it('suggests choosing the language when the speech recognition failed on Auto-detect', () => {
+    render(<TranscriptionProgressCard autoLanguage />)
+
+    act(() => sockets[0].receive({ type: 'status', status: 'failed', error: 'x', error_code: 'asr_failed' }))
+
+    expect(screen.getByText(germanHint())).toBeInTheDocument()
+  })
+
+  it('gives no language hint when the language was chosen', () => {
+    render(<TranscriptionProgressCard />)
+
+    act(() => sockets[0].receive({ type: 'status', status: 'failed', error: 'x', error_code: 'asr_failed' }))
+
+    expect(screen.queryByText(germanHint())).toBeNull()
+  })
+
+  it('gives no language hint for a failure the speech recognition did not report', () => {
+    render(<TranscriptionProgressCard autoLanguage />)
+
+    act(() => sockets[0].receive({ type: 'status', status: 'failed', error: RESTART_TEXT, error_code: 'server_restarted' }))
+
+    expect(screen.queryByText(germanHint())).toBeNull()
+  })
+
   it('shows the server text for a failure without a known code', () => {
     render(<TranscriptionProgressCard />)
 
