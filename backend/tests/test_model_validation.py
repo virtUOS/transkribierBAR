@@ -114,3 +114,16 @@ async def test_min_speakers_alone_is_accepted(instance_models, mock_asr):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await _transcribe(client, mock_asr, model="tiny", min_speakers=2, max_speakers=0)
     assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fields", [{}, {"language": None}, {"language": "auto"}])
+async def test_auto_detect_is_stored_as_no_language(instance_models, mock_asr, fields):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await _transcribe(client, mock_asr, **fields)
+    assert resp.status_code == 200
+    async with get_db() as db:
+        row = await (await db.execute(
+            "SELECT language FROM transcriptions WHERE id = ?", (resp.json()["id"],),
+        )).fetchone()
+    assert row["language"] is None

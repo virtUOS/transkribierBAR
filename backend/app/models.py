@@ -33,6 +33,13 @@ class TranscriptionSettings(BaseModel):
     initial_prompt: str | None = None
     hotwords: str | None = None
 
+    # The ASR backends take "auto" as Auto-detect; stored, it is NULL like a
+    # missing language, so `transcriptions.language` has one value for it.
+    @field_validator("language")
+    @classmethod
+    def _auto_is_no_language(cls, v: str | None) -> str | None:
+        return None if v == "auto" else v
+
     @model_validator(mode="after")
     def _check_speaker_bounds(self) -> "TranscriptionSettings":
         if self.min_speakers < 0 or self.max_speakers < 0:
