@@ -113,3 +113,11 @@ async def test_status_endpoint_returns_the_code_next_to_the_message():
     assert resp.status_code == 200
     assert resp.json()["error"] == "ASR job x stuck"
     assert resp.json()["error_code"] == "timeout"
+
+
+@pytest.mark.asyncio
+async def test_backend_timeout_error_stores_timeout():
+    backend = _backend()
+    backend.submit.side_effect = TimeoutError("ASR request exceeded 1800s")
+    row = await _run(backend)
+    assert (row["status"], row["error_code"]) == ("failed", "timeout")
