@@ -13,7 +13,7 @@ jobs:
       contents: read
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Dependabot bumps the base image on its own; the PR stays red until
       # frontend/.node-version (and with it CI) moves to the same version.
