@@ -57,8 +57,9 @@ def test_form_data_min_only():
 
 def test_timeout_for():
     t = WhisperXBackend._timeout_for(TranscriptionSettings(job_timeout=3600.0))
-    assert (t.read, t.write, t.connect) == (3600.0, 3600.0, 30.0)
-    assert WhisperXBackend._timeout_for(TranscriptionSettings(job_timeout=None)).read == 600.0
+    assert (t.read, t.write, t.connect, t.pool) == (3600.0, 3600.0, 30.0, 30.0)
+    d = WhisperXBackend._timeout_for(TranscriptionSettings(job_timeout=None))
+    assert (d.read, d.pool) == (600.0, 30.0)
 
 
 @pytest.mark.asyncio
@@ -146,7 +147,15 @@ async def test_transport_error_propagates(backend, audio):
 async def test_read_timeout_raises_timeout_error(backend, audio):
     with respx.mock:
         respx.post(URL).mock(side_effect=httpx.ReadTimeout("slow"))
-        with pytest.raises(TimeoutError):
+        with pytest.raises(TimeoutError, match="3600"):
+            await backend.submit(audio, _ts(job_timeout=3600.0))
+
+
+@pytest.mark.asyncio
+async def test_connect_timeout_propagates(backend, audio):
+    with respx.mock:
+        respx.post(URL).mock(side_effect=httpx.ConnectTimeout("no route"))
+        with pytest.raises(httpx.ConnectTimeout):
             await backend.submit(audio, _ts())
 
 

@@ -39,6 +39,10 @@ class WhisperXBackend(ASRBackend):
             # Surfaced through get_status, which the router turns into a failed job.
             _statuses[job_id] = "failed"
             _errors[job_id] = self._error_detail(e.response)
+        except httpx.ConnectTimeout:
+            # The server is unreachable, not slow: same path as other transport errors.
+            _statuses[job_id] = "failed"
+            raise
         except httpx.TimeoutException as e:
             _statuses[job_id] = "failed"
             inc(errors_total, "transcription_timeout", "asr")
@@ -86,7 +90,7 @@ class WhisperXBackend(ASRBackend):
     @staticmethod
     def _timeout_for(ts: TranscriptionSettings) -> httpx.Timeout:
         read = ts.job_timeout if ts.job_timeout else DEFAULT_READ_TIMEOUT
-        return httpx.Timeout(read, connect=CONNECT_TIMEOUT)
+        return httpx.Timeout(read, connect=CONNECT_TIMEOUT, pool=CONNECT_TIMEOUT)
 
     @staticmethod
     def _parse_result(payload: dict) -> TranscriptionResult:
