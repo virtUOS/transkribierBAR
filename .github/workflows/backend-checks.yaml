@@ -47,7 +47,7 @@ jobs:
 
       - name: Restore ffmpeg packages
         id: ffmpeg-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/ffmpeg-debs
           key: ${{ steps.ffmpeg.outputs.key }}
@@ -63,7 +63,7 @@ jobs:
 
       - name: Save ffmpeg packages
         if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/ffmpeg-debs
           key: ${{ steps.ffmpeg.outputs.key }}
