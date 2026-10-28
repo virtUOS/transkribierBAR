@@ -774,3 +774,20 @@ def test_ws_requires_authentication(tmp_path):
         with client.websocket_connect("/api/ws/status/t-ws-anon") as ws:
             ws.receive_json()
     assert exc.value.code == 4001
+
+
+@pytest.mark.asyncio
+async def test_transcribe_passes_timeout_and_request_id_to_backend(mock_asr, monkeypatch):
+    # The router's own reference: importlib.reload in other tests replaces config.settings.
+    from app.routers.transcription import settings
+    monkeypatch.setattr(settings, "ASR_JOB_TIMEOUT_MIN", 1234)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        upload_resp = await client.post("/api/upload", files={"file": ("test.mp3", b"fake", "audio/mpeg")})
+        file_id = upload_resp.json()["id"]
+        with patch("app.routers.transcription.get_asr_backend", return_value=mock_asr):
+            resp = await client.post("/api/transcribe", json={"file_id": file_id, "language": "en", "model": "base"})
+            await asyncio.sleep(0.2)
+    ts = mock_asr.submit.await_args.args[1]
+    assert ts.request_id == resp.json()["id"]
+    assert ts.job_timeout == 1234.0
