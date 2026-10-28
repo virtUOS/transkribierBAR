@@ -328,15 +328,21 @@ async def test_reminder_unexpected_error_fails_only_that_token(sender, caplog):
 
 @pytest.mark.asyncio
 async def test_reminder_malformed_address_does_not_abort_the_run(reminder_settings):
-    """The real sender: the stdlib header parser raises AttributeError for "a@[" (3.12)."""
+    """The real sender: an unexpected error while sending to one address (Python
+    3.12's header parser raises AttributeError for "a@[") fails only that token."""
+    def send_message(msg):
+        if msg["To"] == "bad@example.com":
+            raise AttributeError("'InvalidHeaderDefect' object has no attribute 'all_defects'")
+
     fake_smtp = MagicMock()
+    fake_smtp.send_message.side_effect = send_message
     fake_smtp.__enter__.return_value = fake_smtp
     smtp_settings = SimpleNamespace(
         SMTP_HOST="smtp.example.com", SMTP_PORT=587, SMTP_STARTTLS=False,
         SMTP_USER="", SMTP_PASSWORD="", SMTP_FROM="noreply@example.com",
     )
     async with get_db() as db:
-        await _seed_token(db, token_id="t1", user_id="u1", email="a@[", left_days=2)
+        await _seed_token(db, token_id="t1", user_id="u1", email="bad@example.com", left_days=2)
         await _seed_token(db, token_id="t2", user_id="u2", email="ok@example.com", left_days=2.5)
         with patch("app.services.email.settings", smtp_settings), \
              patch("app.services.email.smtplib.SMTP", return_value=fake_smtp):
@@ -344,8 +350,9 @@ async def test_reminder_malformed_address_does_not_abort_the_run(reminder_settin
         assert await _notices(db) == [("t2", 3)]
 
     assert counts == _counts(failed=1, sent=1)
-    fake_smtp.send_message.assert_called_once()
-    assert fake_smtp.send_message.call_args[0][0]["To"] == "ok@example.com"
+    assert [c.args[0]["To"] for c in fake_smtp.send_message.call_args_list] == [
+        "bad@example.com", "ok@example.com",
+    ]
 
 
 @pytest.mark.asyncio
