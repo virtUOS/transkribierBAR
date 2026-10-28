@@ -4,8 +4,8 @@
 # requirements-dev.in, never here.
 #
 # After editing, regenerate both lock files from the backend/ directory:
-#   uv pip compile requirements.in --universal --python-version 3.12 --generate-hashes -o requirements.txt
-#   uv pip compile requirements-dev.in --universal --python-version 3.12 --generate-hashes -o requirements-dev.txt
+#   uv pip compile requirements.in --universal --python-version "$(cat .python-version)" --generate-hashes -o requirements.txt
+#   uv pip compile requirements-dev.in --universal --python-version "$(cat .python-version)" --generate-hashes -o requirements-dev.txt
 # Existing pins are kept unless a change needs a new one. To move pins to the
 # newest allowed versions, add --upgrade (all packages) or
 # --upgrade-package NAME (one package) to the first command, then run the

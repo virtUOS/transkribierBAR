@@ -5,7 +5,7 @@ Instructions for coding agents working in this repository.
 ## Quick Reference
 
 - **Frontend**: React 19 + TypeScript, Vite 8, Zustand, Tailwind CSS 4
-- **Backend**: FastAPI (Python 3.12), async SQLite, Uvicorn
+- **Backend**: FastAPI (Python, version in `backend/.python-version`), async SQLite, Uvicorn
 - **Deployment**: Multi-stage Docker build, Caddy reverse proxy
 
 ## Commands

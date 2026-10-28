@@ -4,7 +4,7 @@
 # development and tests only; the Docker image never installs it.
 #
 # After editing, regenerate from the backend/ directory:
-#   uv pip compile requirements-dev.in --universal --python-version 3.12 --generate-hashes -o requirements-dev.txt
+#   uv pip compile requirements-dev.in --universal --python-version "$(cat .python-version)" --generate-hashes -o requirements-dev.txt
 # If requirements.in changed, regenerate requirements.txt first (see the
 # command in requirements.in).
 -r requirements.in
