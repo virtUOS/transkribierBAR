@@ -158,6 +158,7 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
         language=req.language, model=req.model,
         min_speakers=req.min_speakers, max_speakers=req.max_speakers,
         initial_prompt=req.initial_prompt, hotwords=req.hotwords,
+        request_id=transcription_id,
     )
 
     gauge_dec(transcription_queue_depth)
@@ -169,6 +170,7 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
         audio_duration = await asyncio.wait_for(get_media_duration(file_path), timeout=5)
     except (asyncio.TimeoutError, Exception):
         audio_duration = None
+    ts.job_timeout = _job_timeout_for(audio_duration)
     if audio_duration is not None:
         observe(transcription_audio_duration_seconds, audio_duration, backend_name)
 
