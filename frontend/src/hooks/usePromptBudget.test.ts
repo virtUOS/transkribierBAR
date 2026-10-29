@@ -40,6 +40,26 @@ describe('usePromptBudget', () => {
     expect(result.current).toEqual({ tokens: 40, limit: 223 })
   })
 
+  it('gives no budget for text it has not counted yet', async () => {
+    vi.mocked(api.promptBudget).mockResolvedValue({ tokens: 300, limit: 223 })
+    const { result, rerender } = renderHook(
+      ({ prompt }) => usePromptBudget(prompt, null),
+      { initialProps: { prompt: 'A long prompt' } },
+    )
+    await act(async () => { await vi.advanceTimersByTimeAsync(300) })
+    expect(result.current).toEqual({ tokens: 300, limit: 223 })
+
+    rerender({ prompt: 'A long prompt, edited' })
+    expect(result.current).toBeNull()
+    rerender({ prompt: '' })
+    expect(result.current).toBeNull()
+    rerender({ prompt: 'A short one' })
+    expect(result.current).toBeNull()
+    // The text that was counted gets its count back
+    rerender({ prompt: 'A long prompt' })
+    expect(result.current).toEqual({ tokens: 300, limit: 223 })
+  })
+
   it('gives no budget when the count fails', async () => {
     vi.mocked(api.promptBudget).mockRejectedValue(new Error('offline'))
     const { result } = renderHook(() => usePromptBudget('Sitzung', null))

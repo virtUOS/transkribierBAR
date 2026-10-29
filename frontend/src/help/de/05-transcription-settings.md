@@ -34,7 +34,7 @@ Mit **Erweiterte Optionen** blenden Sie zwei weitere Felder ein. Beide sind opti
 
 Beide Angaben gehen an die Spracherkennung. Leere Felder werden nicht übermittelt.
 
-Die beiden Felder teilen sich einen begrenzten Platz, weil die Spracherkennung beide jedem Abschnitt der Aufnahme voranstellt. Unter den Feldern sehen Sie, wie viel von diesem Platz sie belegen. Sind sie zusammen zu lang, weist ein roter Hinweis darauf hin, und die Schaltfläche, die die Transkription startet, bleibt gesperrt, bis Sie sie kürzen. Der Hinweis erscheint auch bei geschlossenen erweiterten Optionen, zum Beispiel nachdem Sie eine Voreinstellung mit langen Angaben gewählt haben.
+Die beiden Felder teilen sich einen begrenzten Platz, weil die Spracherkennung beide jedem Abschnitt der Aufnahme voranstellt. Unter den Feldern sehen Sie, wie viel von diesem Platz sie belegen. Sind sie zusammen zu lang, weist ein roter Hinweis darauf hin, und sowohl die Schaltfläche, die die Transkription startet, als auch **Als Voreinstellung speichern** bleiben gesperrt, bis Sie sie kürzen. Der Hinweis erscheint auch bei geschlossenen erweiterten Optionen, zum Beispiel nachdem Sie eine Voreinstellung mit langen Angaben gewählt haben.
 
 ## Voreinstellungen
 

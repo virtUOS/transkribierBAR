@@ -95,8 +95,17 @@ export const api = {
       body: JSON.stringify(settings),
     }),
 
-  promptBudget: (fields: { initial_prompt: string | null; hotwords: string | null }) =>
-    request<PromptBudget>('/api/prompt-budget', { method: 'POST', body: JSON.stringify(fields) }),
+  // Counted in the background while people type, so a failure must not navigate away as request()
+  // does: that would drop an uploaded file. Submitting the settings checks the budget again.
+  promptBudget: async (fields: { initial_prompt: string | null; hotwords: string | null }): Promise<PromptBudget> => {
+    const response = await fetch(`${BASE}/api/prompt-budget`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields),
+    })
+    if (!response.ok || response.redirected) throw new ApiError(response.status, response.statusText)
+    return response.json()
+  },
 
   getStatus: (id: string) => request<TranscriptionStatus>(`/api/status/${id}`),
   getTranscription: (id: string) => request<TranscriptionResult>(`/api/transcription/${id}`),

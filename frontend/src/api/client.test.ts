@@ -28,3 +28,24 @@ describe('ApiError', () => {
     expect(e.name).toBe('ApiError')
   })
 })
+
+describe('api.promptBudget', () => {
+  // It runs in the background while people type; request() would navigate away and lose the upload.
+  it('fails without leaving the page', async () => {
+    const navigations: string[] = []
+    vi.stubGlobal('location', {
+      set href(url: string) { navigations.push(url) },
+      reload: () => { navigations.push('reload') },
+    })
+    try {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+      await expect(api.promptBudget({ initial_prompt: 'Sitzung', hotwords: null })).rejects.toThrow()
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 401 })))
+      await expect(api.promptBudget({ initial_prompt: 'Sitzung', hotwords: null })).rejects.toThrow()
+
+      expect(navigations).toEqual([])
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})

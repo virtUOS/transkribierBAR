@@ -2,8 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { useStore } from '../../store'
 import i18n from '../../i18n'
+import { api, ApiError } from '../../api/client'
 import { SettingsPanel, type SettingsPanelValues } from './SettingsPanel'
 import type { ConfigResponse, PromptBudget } from '../../api/types'
+
+vi.mock('../../api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../api/client')>()
+  return { ...actual, api: { createTranscriptionPreset: vi.fn() } }
+})
 
 function buildValues(overrides: Partial<SettingsPanelValues> = {}): SettingsPanelValues {
   return {
@@ -105,6 +111,25 @@ describe('SettingsPanel — prompt budget', () => {
     renderPanel(['large-v3-turbo'], { initialPrompt: 'Sitzung' }, { tokens: 100, limit: 223 })
 
     expect(screen.queryByText(/of the available space/)).not.toBeInTheDocument()
+  })
+
+  it('blocks saving the settings as a preset while they are too long', () => {
+    renderPanel(['large-v3-turbo'], { initialPrompt: 'Sitzung' }, { tokens: 300, limit: 223 })
+
+    expect(screen.getByRole('button', { name: 'Save as preset' })).toBeDisabled()
+  })
+
+  it('names the cause when the server rejects the preset as too long', async () => {
+    vi.mocked(api.createTranscriptionPreset).mockRejectedValue(
+      new ApiError(422, 'Initial prompt and hotwords together are too long (224 of 223 tokens).', 'prompt_too_long'),
+    )
+    renderPanel(['large-v3-turbo'], { initialPrompt: 'Sitzung' }, { tokens: 100, limit: 223 })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save as preset' }))
+    fireEvent.change(screen.getByPlaceholderText('Preset name'), { target: { value: 'Mine' } })
+    fireEvent.click(screen.getByRole('button', { name: '✓' }))
+
+    expect(await screen.findByText('Initial prompt and hotwords together are too long. Please shorten them.')).toBeInTheDocument()
   })
 
   it('shows the percentage in German', async () => {

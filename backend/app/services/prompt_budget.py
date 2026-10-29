@@ -1,11 +1,12 @@
 """How much of Whisper's decoder the initial prompt and hotwords take.
 
 faster-whisper (under whisperx-api-server and MurmurAI alike) puts the hotwords and
-the initial prompt in front of every chunk's decoder prompt and caps each at 223
-tokens, but not their sum. The decoder holds 448 positions, and CTranslate2 leaves
-each chunk min(224, 448 - prompt length) tokens of text: past 448 the job fails,
-and above about 224 busy chunks lose text. Together the two fields may therefore
-take what one of them may: 223 tokens.
+the initial prompt in front of every chunk's decoder prompt, with 5 special tokens,
+and caps each field at 223 tokens, but not their sum. The decoder holds 448
+positions, and CTranslate2 leaves each chunk min(224, 448 - prompt length) tokens of
+text: past 448 the job fails, and below that a longer prompt leaves text-dense
+chunks less room. Together the two fields may take what faster-whisper lets one of
+them take, 223 tokens, which leaves each chunk at least 220 tokens of text.
 
 Counted with Whisper's multilingual vocabulary (assets/whisper-multilingual.tiktoken,
 from openai/whisper at 839639a, MIT, see assets/whisper-LICENSE); for text it gives

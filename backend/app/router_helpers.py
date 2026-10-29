@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
 from app.config import settings
@@ -15,9 +16,10 @@ def resolve_whisper_model(model: str | None) -> str:
     return model
 
 
-def prompt_too_long_response(initial_prompt: str | None, hotwords: str | None) -> JSONResponse | None:
+async def prompt_too_long_response(initial_prompt: str | None, hotwords: str | None) -> JSONResponse | None:
     """A 422 when the initial prompt and hotwords together exceed the prompt budget."""
-    tokens = prompt_tokens(initial_prompt, hotwords)
+    # Off the event loop: nothing bounds the length of the fields.
+    tokens = await run_in_threadpool(prompt_tokens, initial_prompt, hotwords)
     if tokens <= PROMPT_TOKEN_LIMIT:
         return None
     # The code is for the frontend, which shows its own localized text.

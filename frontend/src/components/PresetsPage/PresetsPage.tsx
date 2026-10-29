@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from '../../store'
-import { api } from '../../api/client'
+import { api, ApiError } from '../../api/client'
 import { isLanguageEnabled } from '../../utils/languages'
 import { resolveModel, singleConfiguredModel } from '../../utils/models'
 import { LanguageOptions } from '../LanguageOptions'
@@ -34,6 +34,8 @@ function TranscriptionPresetsList() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<TranscriptionPresetCreate>(emptyForm)
   const [saving, setSaving] = useState(false)
+  // Shown only while the form is the one the failed save was made with
+  const [saveError, setSaveError] = useState<{ form: TranscriptionPresetCreate; message: string } | null>(null)
   const promptBudget = usePromptBudget(form.initial_prompt, form.hotwords)
 
   const models = config?.whisper_models ?? []
@@ -100,6 +102,10 @@ function TranscriptionPresetsList() {
       handleCancel()
     } catch (err) {
       console.error(err)
+      const message = err instanceof ApiError && err.code === 'prompt_too_long'
+        ? t('settings.promptBudget.rejected')
+        : err instanceof Error ? err.message : String(err)
+      setSaveError({ form, message })
     } finally {
       setSaving(false)
     }
@@ -216,6 +222,7 @@ function TranscriptionPresetsList() {
             />
             <PromptBudgetNote budget={promptBudget} />
           </div>
+          {saveError?.form === form && <p className="text-xs text-red-400">{saveError.message}</p>}
           <div className="flex gap-2 justify-end">
             <button onClick={handleCancel} className="text-sm text-gray-400 hover:text-white px-3 py-1.5">
               {t('common.cancel')}

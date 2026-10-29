@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock, patch
@@ -120,3 +122,31 @@ async def test_preset_update_rejects_a_prompt_over_the_limit(client):
     assert resp.json()["code"] == "prompt_too_long"
     resp = await client.get(f"/api/presets/transcription/{preset_id}", headers=DEV_HEADERS)
     assert resp.json()["hotwords"] == AT_LIMIT_HOTWORDS
+
+
+@pytest.mark.asyncio
+async def test_presets_saved_before_the_limit_stay_readable(client):
+    too_long = AT_LIMIT_PROMPT + " b"
+    async with get_db() as db:
+        await db.execute(
+            """INSERT INTO transcription_presets
+               (id, user_id, name, language, model, min_speakers, max_speakers, initial_prompt, hotwords)
+               VALUES ('old', 'test-user', 'Old', NULL, 'base', 0, 0, ?, ?)""",
+            (too_long, AT_LIMIT_HOTWORDS),
+        )
+        await db.commit()
+
+    resp = await client.get("/api/presets/transcription", headers=DEV_HEADERS)
+    assert [p["initial_prompt"] for p in resp.json()] == [too_long]
+    resp = await client.get("/api/presets/transcription/old", headers=DEV_HEADERS)
+    assert resp.status_code == 200
+    assert resp.json()["initial_prompt"] == too_long
+
+
+@pytest.mark.parametrize("lang, phrase", [
+    ("en", f"at most {PROMPT_TOKEN_LIMIT} tokens"),
+    ("de", f"höchstens {PROMPT_TOKEN_LIMIT} Tokens"),
+])
+def test_the_api_help_names_the_limit(lang, phrase):
+    help_page = Path(__file__).resolve().parents[2] / "frontend" / "src" / "help" / lang / "14-api-access.md"
+    assert phrase in help_page.read_text(encoding="utf-8")

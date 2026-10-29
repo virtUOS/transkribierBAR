@@ -1,6 +1,7 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from '../../store'
-import { api } from '../../api/client'
+import { api, ApiError } from '../../api/client'
 import { LanguageSelect } from '../LanguageSelect'
 import { PresetSelect } from '../PresetSelect/PresetSelect'
 import { singleConfiguredModel } from '../../utils/models'
@@ -44,19 +45,32 @@ export function SettingsPanel({ values, onChange, saveError = null, promptBudget
     onChange(presetSettings(presetId, transcriptionPresets))
   }
 
+  // Shown only while the settings are those the failed save was made with
+  const [presetSaveError, setPresetSaveError] = useState<{ values: SettingsPanelValues; message: string } | null>(null)
+  const promptTooLong = isOverPromptBudget(promptBudget)
+
   const handleSavePreset = async (name: string) => {
-    const preset = await api.createTranscriptionPreset({
-      name,
-      language: values.language === 'auto' ? null : values.language,
-      model: singleModel ?? values.model,
-      min_speakers: values.detectSpeakers ? values.minSpeakers : 0,
-      max_speakers: values.detectSpeakers ? values.maxSpeakers : 0,
-      initial_prompt: values.initialPrompt || null,
-      hotwords: values.hotwords || null,
-    })
-    setTranscriptionPresets([...transcriptionPresets, preset])
-    onChange({ selectedPresetId: preset.id })
+    setPresetSaveError(null)
+    try {
+      const preset = await api.createTranscriptionPreset({
+        name,
+        language: values.language === 'auto' ? null : values.language,
+        model: singleModel ?? values.model,
+        min_speakers: values.detectSpeakers ? values.minSpeakers : 0,
+        max_speakers: values.detectSpeakers ? values.maxSpeakers : 0,
+        initial_prompt: values.initialPrompt || null,
+        hotwords: values.hotwords || null,
+      })
+      setTranscriptionPresets([...transcriptionPresets, preset])
+      onChange({ selectedPresetId: preset.id })
+    } catch (e) {
+      const message = e instanceof ApiError && e.code === 'prompt_too_long'
+        ? t('settings.promptBudget.rejected')
+        : e instanceof Error ? e.message : String(e)
+      setPresetSaveError({ values, message })
+    }
   }
+  const shownError = saveError ?? (presetSaveError?.values === values ? presetSaveError.message : null)
 
   const handleLoadBundle = (bundleId: string | null) => {
     setActiveBundleId(bundleId)
@@ -113,6 +127,7 @@ export function SettingsPanel({ values, onChange, saveError = null, promptBudget
               onSelect={() => {}}
               onSave={handleSavePreset}
               hideDropdown
+              saveDisabled={promptTooLong}
             />
           </div>
         </fieldset>
@@ -174,17 +189,17 @@ export function SettingsPanel({ values, onChange, saveError = null, promptBudget
         </button>
       </div>
 
-      {saveError && (
+      {shownError && (
         <div className="p-4 bg-red-900/30 rounded-lg border border-red-700">
           <div className="flex items-center gap-3">
             <span className="text-red-400 text-lg" aria-hidden="true">!</span>
-            <span className="text-red-300 text-sm">{saveError}</span>
+            <span className="text-red-300 text-sm">{shownError}</span>
           </div>
         </div>
       )}
 
       {/* A loaded preset can be too long while its fields are out of sight; Start is blocked then */}
-      {!values.showAdvanced && isOverPromptBudget(promptBudget) && <PromptBudgetNote budget={promptBudget} />}
+      {!values.showAdvanced && promptTooLong && <PromptBudgetNote budget={promptBudget} />}
 
       {/* Advanced options panel — wrapped in a labeled container to match other groups */}
       {values.showAdvanced && (

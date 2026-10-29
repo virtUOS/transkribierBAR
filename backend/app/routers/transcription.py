@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.concurrency import run_in_threadpool
 from app.config import settings
 from app.dependencies import get_current_user
 from app.router_helpers import (
@@ -43,7 +44,8 @@ router = APIRouter()
 @router.post("/api/prompt-budget", response_model=PromptBudget)
 async def get_prompt_budget(req: PromptBudgetRequest, user: UserInfo = Depends(get_current_user)):
     """How many tokens the initial prompt and hotwords take together, and the limit."""
-    return PromptBudget(tokens=prompt_tokens(req.initial_prompt, req.hotwords), limit=PROMPT_TOKEN_LIMIT)
+    tokens = await run_in_threadpool(prompt_tokens, req.initial_prompt, req.hotwords)
+    return PromptBudget(tokens=tokens, limit=PROMPT_TOKEN_LIMIT)
 
 
 @router.post("/api/transcribe")
@@ -52,7 +54,7 @@ async def start_transcription(
     user: UserInfo = Depends(get_current_user),
 ):
     req.model = resolve_whisper_model(req.model)
-    if too_long := prompt_too_long_response(req.initial_prompt, req.hotwords):
+    if too_long := await prompt_too_long_response(req.initial_prompt, req.hotwords):
         return too_long
     async with get_db() as db:
         cursor = await db.execute(
