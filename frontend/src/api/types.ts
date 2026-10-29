@@ -216,6 +216,12 @@ export interface TranscriptionPreset {
   updated_at: string | null
 }
 
+/** Tokens the initial prompt and hotwords take together, and how many Whisper allows. */
+export interface PromptBudget {
+  tokens: number
+  limit: number
+}
+
 export interface TranscriptionPresetCreate {
   name: string
   language?: string | null

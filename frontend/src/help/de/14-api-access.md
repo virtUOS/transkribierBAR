@@ -80,6 +80,8 @@ Die Antwort enthält die `id` der Transkription (`TRANSCRIPTION_ID`) und den Sta
 
 > **Das Modell.** `model` nennt eines der Modelle, die diese Installation anbietet; das Feld **Qualität** bei **Hochladen** führt sie mit ihren Namen in Klammern auf. Lassen Sie `model` weg, wird das Standardmodell {{default_model}} dieser Installation verwendet. Ein Modell, das diese Installation nicht anbietet, wird mit Status 422 abgelehnt; die Meldung nennt das abgelehnte Modell.
 
+> **Anfangs-Prompt und Schlüsselwörter.** Zusammen dürfen sie höchstens 223 Tokens aus dem Vokabular der Spracherkennung belegen, grob 650 bis 850 Zeichen deutschen Text und weniger in Schriften wie Chinesisch oder Arabisch. Längere Angaben werden mit Status 422 und `"code": "prompt_too_long"` abgelehnt; die Meldung nennt die Zahl der Tokens. Beim Speichern einer Transkriptions-Voreinstellung gilt dieselbe Prüfung. `POST /api/prompt-budget` mit den Feldern `initial_prompt` und `hotwords` antwortet mit `tokens` und `limit` und startet nichts.
+
 **3. Auf das Ergebnis warten.** Fragen Sie den Status ab, bis er `completed` oder `failed` ist:
 
 ```

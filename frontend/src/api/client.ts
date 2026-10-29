@@ -1,5 +1,5 @@
 import type {
-  FileInfo, TranscriptionSettings, TranscriptionStatus,
+  FileInfo, TranscriptionSettings, TranscriptionStatus, PromptBudget,
   TranscriptionResult, TranscriptionListItem, ConfigResponse,
   OriginalTranscription, SaveTranscriptionResponse,
   RefinementResult,
@@ -94,6 +94,18 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(settings),
     }),
+
+  // Counted in the background while people type, so a failure must not navigate away as request()
+  // does: that would drop an uploaded file. Submitting the settings checks the budget again.
+  promptBudget: async (fields: { initial_prompt: string | null; hotwords: string | null }): Promise<PromptBudget> => {
+    const response = await fetch(`${BASE}/api/prompt-budget`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields),
+    })
+    if (!response.ok || response.redirected) throw new ApiError(response.status, response.statusText)
+    return response.json()
+  },
 
   getStatus: (id: string) => request<TranscriptionStatus>(`/api/status/${id}`),
   getTranscription: (id: string) => request<TranscriptionResult>(`/api/transcription/${id}`),

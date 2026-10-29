@@ -9,8 +9,9 @@ import { TranscriptionProgressCard } from './components/ProgressBar'
 import { TranscriptionList } from './components/TranscriptionList'
 import { TabBar } from './components/TabBar'
 import { useStore, setPopStateFlag } from './store'
-import { api } from './api/client'
+import { api, ApiError } from './api/client'
 import { useBeforeUnloadWarning } from './hooks/useBeforeUnloadWarning'
+import { isOverPromptBudget, usePromptBudget } from './hooks/usePromptBudget'
 import { LoadingFallback } from './components/LoadingFallback'
 import { ChunkErrorBoundary } from './components/ChunkErrorBoundary'
 import { DetectedLanguage } from './components/DetectedLanguage'
@@ -210,6 +211,7 @@ function MainApp() {
   const updateSettings = useCallback((patch: Partial<SettingsPanelValues>) => {
     setSettings((s) => ({ ...s, ...patch }))
   }, [])
+  const promptBudget = usePromptBudget(settings.initialPrompt, settings.hotwords)
 
   const [pendingTranscription, setPendingTranscription] = useState(false)
   const [submittedSummary, setSubmittedSummary] = useState<SubmittedSummary | null>(null)
@@ -463,7 +465,11 @@ function MainApp() {
       useStore.getState().setTranscriptionStatus(result.status)
       setPendingTranscription(false)
     } catch (e) {
-      setSubmitError(e instanceof Error ? e.message : 'Transcription failed')
+      if (e instanceof ApiError && e.code === 'prompt_too_long') {
+        setSubmitError(t('settings.promptBudget.rejected'))
+      } else {
+        setSubmitError(e instanceof Error ? e.message : 'Transcription failed')
+      }
       setPendingTranscription(false)
     } finally {
       setSubmitting(false)
@@ -512,7 +518,7 @@ function MainApp() {
     return t('transcription.transcribe')
   })()
 
-  const transcribeDisabled = (!file && !uploading) || submitting
+  const transcribeDisabled = (!file && !uploading) || submitting || isOverPromptBudget(promptBudget)
 
   useEffect(() => {
     if (currentView !== 'upload' && currentView !== 'record') {
@@ -580,7 +586,7 @@ function MainApp() {
             <>
               <FileUpload />
               {(file || uploading) && !showEditor && (
-                <SettingsPanel values={settings} onChange={updateSettings} />
+                <SettingsPanel values={settings} onChange={updateSettings} promptBudget={promptBudget} />
               )}
               {(file || uploading) && !showEditor && (
                 <TranscribeActionBar
@@ -626,7 +632,7 @@ function MainApp() {
                 </Suspense>
               </ChunkErrorBoundary>
               {(file || uploading) && !showEditor && (
-                <SettingsPanel values={settings} onChange={updateSettings} />
+                <SettingsPanel values={settings} onChange={updateSettings} promptBudget={promptBudget} />
               )}
               {(file || uploading) && !showEditor && (
                 <TranscribeActionBar

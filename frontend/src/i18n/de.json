@@ -21,6 +21,11 @@
     "initialPromptHelp": "Optionaler Kontext für die Transkription",
     "hotwords": "Schlüsselwörter",
     "hotwordsHelp": "Kommagetrennte Fachbegriffe",
+    "promptBudget": {
+      "usage": "Anfangs-Prompt und Schlüsselwörter belegen {{percent}} % des verfügbaren Platzes.",
+      "tooLong": "Anfangs-Prompt und Schlüsselwörter sind zusammen zu lang ({{percent}} % des verfügbaren Platzes). Bitte kürzen Sie sie.",
+      "rejected": "Anfangs-Prompt und Schlüsselwörter sind zusammen zu lang. Bitte kürzen Sie sie."
+    },
     "groups": {
       "presets": "Voreinstellungen",
       "transcription": "Transkription",

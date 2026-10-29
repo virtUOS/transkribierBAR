@@ -2,8 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { useStore } from '../../store'
 import i18n from '../../i18n'
+import { api, ApiError } from '../../api/client'
 import { SettingsPanel, type SettingsPanelValues } from './SettingsPanel'
-import type { ConfigResponse } from '../../api/types'
+import type { ConfigResponse, PromptBudget } from '../../api/types'
+
+vi.mock('../../api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../api/client')>()
+  return { ...actual, api: { createTranscriptionPreset: vi.fn() } }
+})
 
 function buildValues(overrides: Partial<SettingsPanelValues> = {}): SettingsPanelValues {
   return {
@@ -34,10 +40,12 @@ function buildConfig(whisper_models: string[]): ConfigResponse {
 
 // Sets the store's model list and renders the panel with those models
 // (plus any values that vary for a given test). Returns the onChange spy.
-function renderPanel(models: string[], overrides: Partial<SettingsPanelValues> = {}) {
+function renderPanel(
+  models: string[], overrides: Partial<SettingsPanelValues> = {}, promptBudget: PromptBudget | null = null,
+) {
   const onChange = vi.fn()
   useStore.setState({ config: buildConfig(models) })
-  render(<SettingsPanel values={buildValues(overrides)} onChange={onChange} />)
+  render(<SettingsPanel values={buildValues(overrides)} onChange={onChange} promptBudget={promptBudget} />)
   return onChange
 }
 
@@ -81,5 +89,53 @@ describe('SettingsPanel — model field', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Quality' }), { target: { value: 'large-v3' } })
 
     expect(onChange).toHaveBeenCalledWith({ model: 'large-v3' })
+  })
+})
+
+describe('SettingsPanel — prompt budget', () => {
+  const tooLong = 'Initial prompt and hotwords together are too long (135% of the available space). Please shorten them.'
+
+  it('shows the share used under the advanced options', () => {
+    renderPanel(['large-v3-turbo'], { showAdvanced: true, initialPrompt: 'Sitzung' }, { tokens: 100, limit: 223 })
+
+    expect(screen.getByText('Initial prompt and hotwords use 45% of the available space.')).toBeInTheDocument()
+  })
+
+  it('says they are too long even while the advanced options are closed', () => {
+    renderPanel(['large-v3-turbo'], { initialPrompt: 'Sitzung' }, { tokens: 300, limit: 223 })
+
+    expect(screen.getByText(tooLong)).toBeInTheDocument()
+  })
+
+  it('says nothing while closed and within the limit', () => {
+    renderPanel(['large-v3-turbo'], { initialPrompt: 'Sitzung' }, { tokens: 100, limit: 223 })
+
+    expect(screen.queryByText(/of the available space/)).not.toBeInTheDocument()
+  })
+
+  it('blocks saving the settings as a preset while they are too long', () => {
+    renderPanel(['large-v3-turbo'], { initialPrompt: 'Sitzung' }, { tokens: 300, limit: 223 })
+
+    expect(screen.getByRole('button', { name: 'Save as preset' })).toBeDisabled()
+  })
+
+  it('names the cause when the server rejects the preset as too long', async () => {
+    vi.mocked(api.createTranscriptionPreset).mockRejectedValue(
+      new ApiError(422, 'Initial prompt and hotwords together are too long (224 of 223 tokens).', 'prompt_too_long'),
+    )
+    renderPanel(['large-v3-turbo'], { initialPrompt: 'Sitzung' }, { tokens: 100, limit: 223 })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save as preset' }))
+    fireEvent.change(screen.getByPlaceholderText('Preset name'), { target: { value: 'Mine' } })
+    fireEvent.click(screen.getByRole('button', { name: '✓' }))
+
+    expect(await screen.findByText('Initial prompt and hotwords together are too long. Please shorten them.')).toBeInTheDocument()
+  })
+
+  it('shows the percentage in German', async () => {
+    await i18n.changeLanguage('de')
+    renderPanel(['large-v3-turbo'], { showAdvanced: true, initialPrompt: 'Sitzung' }, { tokens: 100, limit: 223 })
+
+    expect(screen.getByText('Anfangs-Prompt und Schlüsselwörter belegen 45 % des verfügbaren Platzes.')).toBeInTheDocument()
   })
 })

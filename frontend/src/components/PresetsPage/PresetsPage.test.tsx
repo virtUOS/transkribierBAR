@@ -2,14 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useStore } from '../../store'
 import i18n from '../../i18n'
-import { api } from '../../api/client'
+import { api, ApiError } from '../../api/client'
 import { PresetsPage } from './PresetsPage'
 import type { AnalysisPreset, ConfigResponse, PresetBundle, TranscriptionPreset } from '../../api/types'
 
-vi.mock('../../api/client', () => ({
+vi.mock('../../api/client', async (importOriginal) => ({
+  ApiError: (await importOriginal<typeof import('../../api/client')>()).ApiError,
   api: {
     createTranscriptionPreset: vi.fn(),
     updateTranscriptionPreset: vi.fn(),
+    promptBudget: vi.fn(),
     updateAnalysisPreset: vi.fn(),
     clearDefaultBundle: vi.fn(),
     setDefaultBundle: vi.fn(),
@@ -98,6 +100,43 @@ describe('PresetsPage — transcription preset speakers', () => {
       'p1',
       expect.objectContaining({ min_speakers: 0, max_speakers: 0 }),
     )
+  })
+})
+
+describe('PresetsPage — prompt budget', () => {
+  it('shows how much space the prompt and hotwords use', async () => {
+    vi.mocked(api.promptBudget).mockResolvedValue({ tokens: 100, limit: 223 })
+    renderPage([buildPreset({ initial_prompt: 'Sitzung', hotwords: 'Osnabrück' })])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+
+    expect(await screen.findByText('Initial prompt and hotwords use 45% of the available space.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+  })
+
+  it('blocks saving while they are too long together', async () => {
+    vi.mocked(api.promptBudget).mockResolvedValue({ tokens: 300, limit: 223 })
+    renderPage([buildPreset({ initial_prompt: 'Sitzung', hotwords: 'Osnabrück' })])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+
+    expect(await screen.findByText(
+      'Initial prompt and hotwords together are too long (135% of the available space). Please shorten them.',
+    )).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+
+  it('names the cause when the server rejects them as too long', async () => {
+    vi.mocked(api.promptBudget).mockResolvedValue({ tokens: 100, limit: 223 })
+    vi.mocked(api.updateTranscriptionPreset).mockRejectedValue(
+      new ApiError(422, 'Initial prompt and hotwords together are too long (224 of 223 tokens).', 'prompt_too_long'),
+    )
+    renderPage([buildPreset({ initial_prompt: 'Sitzung', hotwords: 'Osnabrück' })])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText('Initial prompt and hotwords together are too long. Please shorten them.')).toBeInTheDocument()
   })
 })
 
