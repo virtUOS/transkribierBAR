@@ -49,6 +49,16 @@ class TranscriptionSettings(BaseModel):
         return self
 
 
+class PromptBudgetRequest(BaseModel):
+    initial_prompt: str | None = None
+    hotwords: str | None = None
+
+
+class PromptBudget(BaseModel):
+    tokens: int
+    limit: int
+
+
 class TranscriptionStatus(BaseModel):
     id: str
     status: str

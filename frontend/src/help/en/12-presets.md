@@ -32,6 +32,8 @@ A transcription preset stores language, speaker detection, initial prompt, hotwo
 
 If you choose such a preset in **Upload** or **Record**, it applies the language, the speaker settings stored in it, the model, the initial prompt and the hotwords.
 
+As in the transcription settings, the initial prompt and the hotwords share a limited space. Below the fields the form shows how much of it they use, and **Save** stays disabled while they are too long together.
+
 ## Analysis presets
 
 An analysis preset stores the template and the output language. For **Custom** it also stores your own instruction. The form on the Presets page has the fields **Name**, **Select a template**, **Output language** and, for **Custom**, **Customize prompt**.

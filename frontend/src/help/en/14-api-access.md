@@ -80,6 +80,8 @@ The answer contains the `id` of the transcription (`TRANSCRIPTION_ID`) and the s
 
 > **The model.** `model` names one of the models this installation offers; the **Quality** field in **Upload** lists them with their names in parentheses. If you leave out `model`, the installation's default model {{default_model}} is used. A model this installation does not offer is rejected with status 422, and the message names the rejected model.
 
+> **Initial prompt and hotwords.** Together they may take at most 223 tokens of the speech recognition's vocabulary, roughly 650 to 850 characters of German text and fewer in scripts such as Chinese or Arabic. Longer entries are rejected with status 422 and `"code": "prompt_too_long"`; the message names the number of tokens. Saving a transcription preset checks the same. `POST /api/prompt-budget` with the fields `initial_prompt` and `hotwords` answers with `tokens` and `limit` and starts nothing.
+
 **3. Wait for the result.** Query the status until it is `completed` or `failed`:
 
 ```

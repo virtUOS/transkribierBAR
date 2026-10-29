@@ -34,6 +34,8 @@ You give names to the detected people after the transcription, in the **Subtitle
 
 Both entries go to the speech recognition. Empty fields are not sent.
 
+The two fields share a limited space, because the speech recognition puts both in front of every section of the recording. Below the fields you see how much of that space they use. If they are too long together, a note says so in red, and the button that starts the transcription stays disabled until you shorten them. The note also appears while the advanced options are closed, for example after you have chosen a preset with long entries.
+
 ## Presets
 
 The **Presets** group is the first group.

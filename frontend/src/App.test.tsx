@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import i18n from './i18n'
 import { useStore } from './store'
-import { api } from './api/client'
+import { api, ApiError } from './api/client'
 import App from './App'
 import type { ConfigResponse, PresetBundle, PresetBundleExpanded, TranscriptionPreset } from './api/types'
 
@@ -17,6 +17,8 @@ vi.mock('./api/client', async (importOriginal) => {
       getRefinementPresets: vi.fn(),
       getBundles: vi.fn(),
       getDefaultBundle: vi.fn(),
+      promptBudget: vi.fn(),
+      startTranscription: vi.fn(),
     },
   }
 })
@@ -144,5 +146,37 @@ describe('Upload settings and the default bundle', () => {
     expect(select.value).toBe('B')
     expect(screen.getByLabelText('Transcription language')).toHaveValue('fr')
     expect(screen.getByLabelText('Detect speakers')).toBeChecked()
+  })
+})
+
+describe('Upload settings and the prompt budget', () => {
+  async function typePrompt(text: string) {
+    fireEvent.click(await screen.findByRole('button', { name: /Advanced options/ }))
+    fireEvent.change(screen.getByPlaceholderText('Optional context for the transcription'), { target: { value: text } })
+  }
+
+  it('blocks Transcribe while the initial prompt and hotwords are too long', async () => {
+    serve([])
+    vi.mocked(api.promptBudget).mockResolvedValue({ tokens: 300, limit: 223 })
+    render(<App />)
+    await typePrompt('A very long prompt')
+
+    expect(await screen.findByText(/together are too long \(135% of the available space\)/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Transcribe' })).toBeDisabled()
+  })
+
+  it('names the cause when the server rejects them as too long', async () => {
+    serve([])
+    vi.mocked(api.promptBudget).mockResolvedValue({ tokens: 100, limit: 223 })
+    vi.mocked(api.startTranscription).mockRejectedValue(
+      new ApiError(422, 'Initial prompt and hotwords together are too long (224 of 223 tokens).', 'prompt_too_long'),
+    )
+    render(<App />)
+    await typePrompt('A prompt')
+    await screen.findByText(/use 45% of the available space/)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Transcribe' }))
+
+    expect(await screen.findByText('Initial prompt and hotwords together are too long. Please shorten them.')).toBeInTheDocument()
   })
 })

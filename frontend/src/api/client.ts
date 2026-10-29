@@ -1,5 +1,5 @@
 import type {
-  FileInfo, TranscriptionSettings, TranscriptionStatus,
+  FileInfo, TranscriptionSettings, TranscriptionStatus, PromptBudget,
   TranscriptionResult, TranscriptionListItem, ConfigResponse,
   OriginalTranscription, SaveTranscriptionResponse,
   RefinementResult,
@@ -94,6 +94,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(settings),
     }),
+
+  promptBudget: (fields: { initial_prompt: string | null; hotwords: string | null }) =>
+    request<PromptBudget>('/api/prompt-budget', { method: 'POST', body: JSON.stringify(fields) }),
 
   getStatus: (id: string) => request<TranscriptionStatus>(`/api/status/${id}`),
   getTranscription: (id: string) => request<TranscriptionResult>(`/api/transcription/${id}`),

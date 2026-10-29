@@ -21,6 +21,11 @@
     "initialPromptHelp": "Optional context for the transcription",
     "hotwords": "Hotwords",
     "hotwordsHelp": "Comma-separated technical terms",
+    "promptBudget": {
+      "usage": "Initial prompt and hotwords use {{percent}}% of the available space.",
+      "tooLong": "Initial prompt and hotwords together are too long ({{percent}}% of the available space). Please shorten them.",
+      "rejected": "Initial prompt and hotwords together are too long. Please shorten them."
+    },
     "groups": {
       "presets": "Presets",
       "transcription": "Transcription",

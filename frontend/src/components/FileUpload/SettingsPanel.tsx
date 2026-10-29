@@ -6,6 +6,9 @@ import { PresetSelect } from '../PresetSelect/PresetSelect'
 import { singleConfiguredModel } from '../../utils/models'
 import { SpeakerFields } from './SpeakerFields'
 import { bundleSettings, presetSettings } from './presetSettings'
+import { PromptBudgetNote } from './PromptBudgetNote'
+import { isOverPromptBudget } from '../../hooks/usePromptBudget'
+import type { PromptBudget } from '../../api/types'
 
 export interface SettingsPanelValues {
   language: string
@@ -23,9 +26,10 @@ interface SettingsPanelProps {
   values: SettingsPanelValues
   onChange: (patch: Partial<SettingsPanelValues>) => void
   saveError?: string | null
+  promptBudget?: PromptBudget | null
 }
 
-export function SettingsPanel({ values, onChange, saveError = null }: SettingsPanelProps) {
+export function SettingsPanel({ values, onChange, saveError = null, promptBudget = null }: SettingsPanelProps) {
   const { t } = useTranslation()
   const config = useStore((s) => s.config)
   const models = config?.whisper_models || []
@@ -179,6 +183,9 @@ export function SettingsPanel({ values, onChange, saveError = null }: SettingsPa
         </div>
       )}
 
+      {/* A loaded preset can be too long while its fields are out of sight; Start is blocked then */}
+      {!values.showAdvanced && isOverPromptBudget(promptBudget) && <PromptBudgetNote budget={promptBudget} />}
+
       {/* Advanced options panel — wrapped in a labeled container to match other groups */}
       {values.showAdvanced && (
         <fieldset data-help="upload-advanced" className={`${groupClass} w-full`}>
@@ -203,6 +210,7 @@ export function SettingsPanel({ values, onChange, saveError = null }: SettingsPa
               />
             </div>
           </div>
+          <PromptBudgetNote budget={promptBudget} />
         </fieldset>
       )}
     </div>

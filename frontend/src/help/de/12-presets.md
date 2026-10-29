@@ -32,6 +32,8 @@ Eine Transkriptions-Voreinstellung speichert Sprache, Erkennung der Sprechenden,
 
 Wenn Sie eine solche Voreinstellung bei **Hochladen** oder **Aufnehmen** wählen, übernimmt sie die Sprache, die in ihr gespeicherten Einstellungen zu den Sprechenden, das Modell, den Anfangs-Prompt und die Schlüsselwörter.
 
+Wie in den Transkriptionseinstellungen teilen sich Anfangs-Prompt und Schlüsselwörter einen begrenzten Platz. Unter den Feldern zeigt das Formular, wie viel davon sie belegen, und **Speichern** bleibt gesperrt, solange sie zusammen zu lang sind.
+
 ## Analyse-Voreinstellungen
 
 Eine Analyse-Voreinstellung speichert die Vorlage und die Ausgabesprache. Bei **Eigene Anweisung** speichert sie auch Ihre eigene Anweisung. Das Formular auf der Seite hat die Felder **Name**, **Vorlage auswählen**, **Ausgabesprache** und, bei **Eigene Anweisung**, **Prompt anpassen**.

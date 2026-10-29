@@ -6,6 +6,8 @@ import { isLanguageEnabled } from '../../utils/languages'
 import { resolveModel, singleConfiguredModel } from '../../utils/models'
 import { LanguageOptions } from '../LanguageOptions'
 import { SpeakerFields } from '../FileUpload/SpeakerFields'
+import { PromptBudgetNote } from '../FileUpload/PromptBudgetNote'
+import { isOverPromptBudget, usePromptBudget } from '../../hooks/usePromptBudget'
 import type {
   TranscriptionPreset,
   TranscriptionPresetCreate,
@@ -32,6 +34,7 @@ function TranscriptionPresetsList() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<TranscriptionPresetCreate>(emptyForm)
   const [saving, setSaving] = useState(false)
+  const promptBudget = usePromptBudget(form.initial_prompt, form.hotwords)
 
   const models = config?.whisper_models ?? []
   const singleModel = singleConfiguredModel(models)
@@ -211,6 +214,7 @@ function TranscriptionPresetsList() {
               rows={2}
               className="w-full bg-gray-700 text-white text-sm rounded px-3 py-1.5 outline-none focus:ring-1 focus:ring-blue-500 resize-none"
             />
+            <PromptBudgetNote budget={promptBudget} />
           </div>
           <div className="flex gap-2 justify-end">
             <button onClick={handleCancel} className="text-sm text-gray-400 hover:text-white px-3 py-1.5">
@@ -219,7 +223,7 @@ function TranscriptionPresetsList() {
             <button
               data-help="preset-save"
               onClick={handleSave}
-              disabled={saving || !form.name.trim()}
+              disabled={saving || !form.name.trim() || isOverPromptBudget(promptBudget)}
               className="text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded px-4 py-1.5"
             >
               {saving ? '…' : t('presets.save')}

@@ -9,11 +9,13 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from app.config import settings
 from app.dependencies import get_current_user
-from app.router_helpers import ensure_transcription_owned, load_speaker_mappings, resolve_whisper_model
+from app.router_helpers import (
+    ensure_transcription_owned, load_speaker_mappings, prompt_too_long_response, resolve_whisper_model,
+)
 from app.models import (
     UserInfo, TranscriptionSettings as TranscriptionSettingsModel,
     TranscriptionStatus, TranscriptionListItem, Utterance, SpeakerMappingRequest,
-    TitleRequest, TranscriptionUpdateRequest,
+    TitleRequest, TranscriptionUpdateRequest, PromptBudgetRequest, PromptBudget,
 )
 from app.database import get_db
 from app.services.asr import get_asr_backend
@@ -21,6 +23,7 @@ from app.services.api_tokens import resolve_token
 from app.services.asr.base import TranscriptionSettings, asr_semaphore
 from app.services.audio import ensure_clean_asr_copy, get_media_duration
 from app.services.formats import generate_srt, generate_vtt, generate_txt
+from app.services.prompt_budget import PROMPT_TOKEN_LIMIT, prompt_tokens
 from app.metrics import (
     inc, observe, gauge_inc, gauge_dec,
     transcriptions_total, transcription_duration_seconds, active_transcriptions,
@@ -37,12 +40,20 @@ from app.metrics import (
 router = APIRouter()
 
 
+@router.post("/api/prompt-budget", response_model=PromptBudget)
+async def get_prompt_budget(req: PromptBudgetRequest, user: UserInfo = Depends(get_current_user)):
+    """How many tokens the initial prompt and hotwords take together, and the limit."""
+    return PromptBudget(tokens=prompt_tokens(req.initial_prompt, req.hotwords), limit=PROMPT_TOKEN_LIMIT)
+
+
 @router.post("/api/transcribe")
 async def start_transcription(
     req: TranscriptionSettingsModel,
     user: UserInfo = Depends(get_current_user),
 ):
     req.model = resolve_whisper_model(req.model)
+    if too_long := prompt_too_long_response(req.initial_prompt, req.hotwords):
+        return too_long
     async with get_db() as db:
         cursor = await db.execute(
             "SELECT id, file_path, mp3_path FROM files WHERE id = ? AND user_id = ?",

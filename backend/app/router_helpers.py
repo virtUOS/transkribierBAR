@@ -1,7 +1,9 @@
 from fastapi import HTTPException
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import get_db
+from app.services.prompt_budget import PROMPT_TOKEN_LIMIT, prompt_tokens
 
 
 def resolve_whisper_model(model: str | None) -> str:
@@ -11,6 +13,21 @@ def resolve_whisper_model(model: str | None) -> str:
     if model not in settings.WHISPER_MODELS:
         raise HTTPException(status_code=422, detail=f"Model '{model}' is not available on this instance")
     return model
+
+
+def prompt_too_long_response(initial_prompt: str | None, hotwords: str | None) -> JSONResponse | None:
+    """A 422 when the initial prompt and hotwords together exceed the prompt budget."""
+    tokens = prompt_tokens(initial_prompt, hotwords)
+    if tokens <= PROMPT_TOKEN_LIMIT:
+        return None
+    # The code is for the frontend, which shows its own localized text.
+    return JSONResponse(status_code=422, content={
+        "detail": (
+            f"Initial prompt and hotwords together are too long "
+            f"({tokens} of {PROMPT_TOKEN_LIMIT} tokens). Please shorten them."
+        ),
+        "code": "prompt_too_long",
+    })
 
 
 async def ensure_transcription_owned(db, transcription_id: str, user_id: str) -> None:
