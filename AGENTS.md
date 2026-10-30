@@ -10,6 +10,18 @@ Instructions for coding agents working in this repository.
 
 ## Commands
 
+### Checking a change
+
+```bash
+scripts/check.sh           # what CI runs on a pull request: backend tests, frontend lint/types/tests, with coverage floors
+scripts/check.sh --e2e     # plus the end-to-end tests (needs ffmpeg and `npx playwright install chromium firefox`)
+scripts/check.sh --image   # plus building and smoke-testing the container image (docker or podman)
+```
+
+Run `scripts/check.sh` before calling a change done, and `--e2e` when it touches a
+user-facing flow or the frontend↔backend contract. The backend runs with `$PYTHON`,
+else `.venv/bin/python` at the repo root, else `python3`.
+
 ### Frontend
 ```bash
 cd frontend
@@ -20,6 +32,8 @@ npm run typecheck    # type-check only (`tsc -b`)
 npm run lint         # eslint
 npm test             # vitest, single run
 npm run test:watch   # vitest in watch mode
+npm run test:coverage  # vitest with the coverage thresholds from vitest.config.ts
+npm run test:e2e     # Playwright end-to-end tests (see "Testing" below)
 ```
 
 Do **not** use `npx tsc --noEmit` here — the root `tsconfig.json` is solution-style
@@ -32,6 +46,8 @@ cd backend
 pip install -r requirements-dev.txt   # runtime + test deps
 uvicorn app.main:app --reload --port 8000
 pytest               # run tests
+pytest --cov         # with the coverage floor from .coveragerc, as CI runs it
+python -m scripts.fake_services --port 8880   # fake ASR+LLM servers for running the app without GPUs
 ```
 
 Dependencies are pinned with hashes. Edit `requirements.in` (runtime) or
@@ -48,6 +64,43 @@ docker run -p 8000:8000 --env-file .env transcription-app
 # Subpath deployment (e.g., /test/)
 docker build --build-arg VITE_BASE_PATH=/test -t transcription-test .
 ```
+
+## Testing
+
+Four layers, all run in CI on every pull request:
+
+- **Backend unit/API tests** (`backend/tests/`, pytest): routers are tested through the
+  FastAPI app with respx/monkeypatched ASR and LLM clients; no network. Every endpoint
+  that takes an id must be tested with another user's id (expect 404).
+- **Frontend unit/component tests** (`frontend/src/**/*.test.ts(x)`, vitest + Testing
+  Library): mock `api/client.ts`, assert through roles and visible text. Behavior that
+  depends on the browser or OS (the recorder's system-audio modes) is tested by mocking
+  `utils/platformDetect.ts`; `RecordingSources` reads it when the module loads, so see
+  `RecordingSources.platforms.test.tsx` for re-importing it per mode.
+- **End-to-end tests** (`frontend/e2e/*.spec.ts`, Playwright): the real backend and the
+  Vite dev server, with `backend/scripts/fake_services.py` standing in for the MurmurAI
+  and OpenAI-compatible servers (canned, deterministic answers; an initial prompt
+  containing `fake:fail` makes the ASR job fail). `e2e/stack.ts` starts the backend on a
+  throwaway database. Each test signs in as its own user through the
+  `X-Auth-Request-User` header (see `e2e/fixtures.ts`), so tests run in parallel without
+  seeing each other's data. Use the `data-help` attributes as selectors where they exist.
+  Add an e2e test for a new user-facing flow; keep edge cases in the unit layers. Everything
+  runs in Chromium; `recorder.spec.ts` also runs in Firefox, since the recorder adapts to
+  the browser. Both get fake media devices. The projects deliberately use no Playwright
+  device presets, which would replace the user agent with a Windows one. Firefox mixes the
+  recorder's inputs only with an audio output, so CI gives the runner a PulseAudio null
+  sink; the recorder tests check that the recording is not silent.
+- **Container smoke test** (`scripts/smoke-test-image.sh <image>`): starts the built
+  image and checks the API, the SPA fallback and `/handbuch/`, including that no
+  build-time placeholder of the guide is left in the page.
+
+A bug found while writing tests gets a GitHub issue first, then a test that links it:
+a strict `xfail` whose reason starts with the issue URL (backend), or an `it.todo` naming
+the issue URL (frontend). A test that works around a bug, or will need changing once it
+is fixed, says so in a comment with the issue URL. Fix the bug and the test together.
+
+Coverage floors (`backend/.coveragerc`, `frontend/vitest.config.ts`) sit just below the
+current numbers. Raise them when coverage grows; never lower them to get a change through.
 
 ## Architecture
 
@@ -67,7 +120,7 @@ docker build --build-arg VITE_BASE_PATH=/test -t transcription-test .
 
 ## Code Style
 
-- Frontend: ESLint 9 + TypeScript ESLint, no semicolons enforced by formatter
+- Frontend: ESLint 10 + TypeScript ESLint, no semicolons enforced by formatter
 - Backend: Standard Python conventions, async/await throughout
 - Commit messages: conventional commits (`feat:`, `fix:`, `refactor:`, etc.)
 - Never add "Co-Authored-By" lines to commit messages
