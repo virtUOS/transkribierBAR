@@ -31,3 +31,20 @@ While the file is uploading, transkribierBAR asks before you switch to another v
 Once the transcription is running, you can leave the page. It continues on the server and appears in the overview later. This does not apply to the steps of a bundle: they only run while the page stays open. If you open the transcription again in the same tab, the steps start then.
 
 > **Large files.** An uploaded file alone does not appear in the overview. Click **Transcribe when ready** while the upload is still running and keep the tab open until the upload has finished. Once the transcription is running, you can leave the page.
+
+## If the transcription fails
+
+If the transcription fails, **Transcription failed** appears with the reason after **Error message:**, for example:
+
+- **The speech recognition did not finish this transcription within the time limit.**
+- **The request to the speech recognition failed.**
+- **The speech recognition reported an error for this transcription.**
+- **The server restarted while this transcription was running.**
+
+If the language was set to Auto-detect and the speech recognition reported an error, it also says: **The language was set to Auto-detect. Choosing the language may help.**
+
+**Try again** takes you back to the settings for the same file. Change what is needed there, for example the language, and click **Transcribe**. You do not have to upload the file again.
+
+The failed transcription stays in the overview with the red status "Failed". If you open it there, its page shows the same notice with the reason and **Try again**. A new transcription of the same file appears as an entry of its own. You remove the failed one with **Delete transcription** on its page; the file is kept as long as another transcription uses it.
+
+If the transcription fails repeatedly, write to [{{contact_email}}](mailto:{{contact_email}}).
