@@ -134,6 +134,22 @@ describe('AnalysisView generation settings', () => {
     expect(api.generateAnalysis).toHaveBeenCalledWith('t1', expect.objectContaining({ template: 'summary', language: 'de' }))
   })
 
+  it('keeps the bundle preset\'s template when the template list arrives', async () => {
+    const agenda = { id: 'agenda', name: 'Agenda', description: '', default_prompt: 'Follow the agenda.' }
+    vi.mocked(api.getAnalysisTemplates).mockResolvedValue([template, agenda])
+    useStore.setState({
+      analysisPresets: [{ ...bundlePreset, template: 'agenda', agenda: 'Item 1' }],
+      bundles: [bundle],
+      activeBundleId: 'b1',
+    })
+    render(<AnalysisView />)
+    await screen.findByRole('button', { name: 'Summary with chapters' })
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }))
+
+    await waitFor(() => expect(api.generateAnalysis).toHaveBeenCalled())
+    expect(api.generateAnalysis).toHaveBeenCalledWith('t1', expect.objectContaining({ template: 'agenda', agenda: 'Item 1' }))
+  })
+
   it('keeps a preset saved by hand selected while a bundle is active', async () => {
     useStore.setState({ analysisPresets: [bundlePreset], bundles: [bundle], activeBundleId: 'b1' })
     vi.spyOn(api, 'createAnalysisPreset').mockResolvedValue({ ...bundlePreset, id: 'ap2', name: 'Mine' })

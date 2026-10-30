@@ -724,6 +724,19 @@ describe('SubtitleEditor dialogs start from the current state', () => {
     expect(vi.mocked(api.translateTranscription).mock.calls[0][2]).toBe('original')
   })
 
+  it('switches the open dialog to a refinement that arrives meanwhile', async () => {
+    useStore.setState({ config: llmConfig, refinedUtterances: null })
+    vi.mocked(api.translateTranscription).mockRejectedValue(new Error('network'))
+    render(<SubtitleEditor />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+    act(() => useStore.setState({ refinedUtterances: refined }))
+    fireEvent.click(dialogTranslateButton())
+
+    await waitFor(() => expect(api.translateTranscription).toHaveBeenCalled())
+    expect(vi.mocked(api.translateTranscription).mock.calls[0][2]).toBe('refined')
+  })
+
   it('fills the refinement context from the active bundle\'s preset', () => {
     useStore.setState({
       config: llmConfig,
