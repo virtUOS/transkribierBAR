@@ -4,7 +4,7 @@ import { useStore } from '../../store'
 import { api } from '../../api/client'
 import i18n from '../../i18n'
 import { TranscriptionProgressCard } from './TranscriptionProgressCard'
-import type { TranscriptionListItem } from '../../api/types'
+import type { TranscriptionListItem, TranscriptionStatus } from '../../api/types'
 
 vi.mock('../../api/client', () => ({
   api: {
@@ -100,6 +100,45 @@ describe('TranscriptionProgressCard failure reason', () => {
     act(() => sockets[0].receive({ type: 'status', status: 'failed', error: 'asr exploded', error_code: 'unknown' }))
 
     expect(screen.getByText(/asr exploded/)).toBeInTheDocument()
+  })
+
+  it('loads the reason of a transcription that is already failed when it opens', async () => {
+    // Opened from the overview: no socket, so the reason has to be fetched.
+    useStore.setState({ transcriptionStatus: 'failed' })
+    vi.mocked(api.getStatus).mockResolvedValue({
+      id: 't1', status: 'failed', progress: null, error: 'ASR job exceeded 1800s', error_code: 'timeout',
+    })
+
+    render(<TranscriptionProgressCard autoLanguage />)
+
+    expect(await screen.findByText(germanDetail('transcription.errors.timeout'))).toBeInTheDocument()
+    expect(api.getStatus).toHaveBeenCalledWith('t1')
+    expect(api.connectWebSocket).not.toHaveBeenCalled()
+    expect(screen.queryByText(germanHint())).toBeNull()
+  })
+
+  it('drops a reason that arrives after another transcription was opened', async () => {
+    useStore.setState({ transcriptionStatus: 'failed' })
+    let resolveFirst!: (s: TranscriptionStatus) => void
+    vi.mocked(api.getStatus).mockReturnValueOnce(new Promise((r) => { resolveFirst = r }))
+    render(<TranscriptionProgressCard />)
+
+    // The second transcription's own reason never arrives in this test.
+    vi.mocked(api.getStatus).mockReturnValue(new Promise(() => {}))
+    act(() => useStore.setState({ transcriptionId: 't2', transcriptionStatus: 'failed' }))
+    await act(async () => resolveFirst({ id: 't1', status: 'failed', progress: null, error: 'x', error_code: 'timeout' }))
+
+    expect(screen.queryByText(germanDetail('transcription.errors.timeout'))).toBeNull()
+    expect(api.getStatus).toHaveBeenLastCalledWith('t2')
+  })
+
+  it('shows the language hint for an already failed Auto-detect transcription', async () => {
+    useStore.setState({ transcriptionStatus: 'failed' })
+    vi.mocked(api.getStatus).mockResolvedValue({ id: 't1', status: 'failed', progress: null, error: 'x', error_code: 'asr_failed' })
+
+    render(<TranscriptionProgressCard autoLanguage />)
+
+    expect(await screen.findByText(germanHint())).toBeInTheDocument()
   })
 
   it('shows a known reason from the status poll in the German UI', async () => {

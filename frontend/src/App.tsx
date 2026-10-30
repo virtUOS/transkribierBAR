@@ -270,7 +270,10 @@ function MainApp() {
       }
       setPopStateFlag(true)
       isPopStateNav.current = true
-      setCurrentView(e.state?.view ?? 'archive')
+      const view = e.state?.view ?? 'archive'
+      // A detail entry whose transcription was closed (Try again, a reset)
+      // would show an empty page.
+      setCurrentView(view === 'detail' && !state.transcriptionId ? 'archive' : view)
       setPopStateFlag(false)
     }
     window.addEventListener('popstate', handlePopState)
@@ -501,6 +504,16 @@ function MainApp() {
     setSubmittedSummary(null)
   }, [])
 
+  // A failed transcription opened from the overview: to the upload settings for
+  // its file, which is still on the server, to transcribe it again.
+  const handleRetryFailed = useCallback(() => {
+    const state = useStore.getState()
+    state.clearTranscriptionState()
+    state.setTranscriptionTitle(null)
+    handleTryAgain()
+    state.setCurrentView('upload')
+  }, [handleTryAgain])
+
   const inSubmittedState =
     (transcriptionId !== null && transcriptionStatus !== 'completed')
     || pendingTranscription
@@ -671,6 +684,7 @@ function MainApp() {
           <DetectedLanguage requested={transcriptionResult?.language} detected={transcriptionResult?.detected_language} />
           <DetailActions />
           <TranscriptionProgressCard
+            onTryAgain={handleRetryFailed}
             autoLanguage={transcriptionHistory.find((h) => h.id === transcriptionId)?.language === null}
           />
           {pipelineStatus && (
