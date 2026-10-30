@@ -4,7 +4,7 @@ import i18n from './i18n'
 import { useStore } from './store'
 import { api, ApiError } from './api/client'
 import App from './App'
-import type { ConfigResponse, PresetBundle, PresetBundleExpanded, TranscriptionPreset } from './api/types'
+import type { ConfigResponse, PresetBundle, PresetBundleExpanded, TranscriptionListItem, TranscriptionPreset } from './api/types'
 
 vi.mock('./api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api/client')>()
@@ -19,6 +19,7 @@ vi.mock('./api/client', async (importOriginal) => {
       getDefaultBundle: vi.fn(),
       promptBudget: vi.fn(),
       startTranscription: vi.fn(),
+      getStatus: vi.fn(),
     },
   }
 })
@@ -178,5 +179,43 @@ describe('Upload settings and the prompt budget', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Transcribe' }))
 
     expect(await screen.findByText('Initial prompt and hotwords together are too long. Please shorten them.')).toBeInTheDocument()
+  })
+})
+
+describe('A failed transcription opened from the overview', () => {
+  const failedItem: TranscriptionListItem = {
+    id: 't1', file_id: 'f1', original_filename: 'talk.mp3', status: 'failed', language: null, model: 'base',
+    created_at: '2026-10-30T08:00:00Z', file_size: 1, expires_at: '2026-11-02T08:00:00Z', archived: false,
+    title: 'Old title', has_video: false,
+  }
+
+  it('offers Try again, which returns to the settings for the same file', async () => {
+    serve([])
+    vi.mocked(api.promptBudget).mockResolvedValue({ tokens: 0, limit: 223 })
+    vi.mocked(api.getStatus).mockResolvedValue({
+      id: 't1', status: 'failed', progress: null, error: 'ASR job exceeded 1800s', error_code: 'timeout',
+    })
+    useStore.setState({
+      currentView: 'detail',
+      transcriptionId: 't1',
+      transcriptionStatus: 'failed',
+      transcriptionTitle: 'Old title',
+      transcriptionHistory: [failedItem],
+    })
+    render(<App />)
+
+    expect(await screen.findByText(
+      'Error message: The speech recognition did not finish this transcription within the time limit.',
+    )).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+    expect(await screen.findByRole('button', { name: 'Transcribe' })).toBeInTheDocument()
+    const state = useStore.getState()
+    expect(state.currentView).toBe('upload')
+    expect(state.transcriptionId).toBeNull()
+    expect(state.transcriptionStatus).toBeNull()
+    expect(state.transcriptionTitle).toBeNull()
+    expect(state.file?.id).toBe('f1')
+    expect(screen.getByText('talk.mp3')).toBeInTheDocument()
   })
 })

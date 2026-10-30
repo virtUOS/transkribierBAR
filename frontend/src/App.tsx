@@ -501,6 +501,16 @@ function MainApp() {
     setSubmittedSummary(null)
   }, [])
 
+  // A failed transcription opened from the overview: back to the settings for
+  // its file, which is still on the server, to transcribe it again.
+  const handleRetryFailed = useCallback(() => {
+    const state = useStore.getState()
+    state.clearTranscriptionState()
+    state.setTranscriptionTitle(null)
+    handleTryAgain()
+    state.setCurrentView('upload')
+  }, [handleTryAgain])
+
   const inSubmittedState =
     (transcriptionId !== null && transcriptionStatus !== 'completed')
     || pendingTranscription
@@ -671,6 +681,7 @@ function MainApp() {
           <DetectedLanguage requested={transcriptionResult?.language} detected={transcriptionResult?.detected_language} />
           <DetailActions />
           <TranscriptionProgressCard
+            onTryAgain={handleRetryFailed}
             autoLanguage={transcriptionHistory.find((h) => h.id === transcriptionId)?.language === null}
           />
           {pipelineStatus && (
