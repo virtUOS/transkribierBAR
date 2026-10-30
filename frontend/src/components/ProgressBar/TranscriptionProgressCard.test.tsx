@@ -4,7 +4,7 @@ import { useStore } from '../../store'
 import { api } from '../../api/client'
 import i18n from '../../i18n'
 import { TranscriptionProgressCard } from './TranscriptionProgressCard'
-import type { TranscriptionListItem } from '../../api/types'
+import type { TranscriptionListItem, TranscriptionStatus } from '../../api/types'
 
 vi.mock('../../api/client', () => ({
   api: {
@@ -115,6 +115,21 @@ describe('TranscriptionProgressCard failure reason', () => {
     expect(api.getStatus).toHaveBeenCalledWith('t1')
     expect(api.connectWebSocket).not.toHaveBeenCalled()
     expect(screen.queryByText(germanHint())).toBeNull()
+  })
+
+  it('drops a reason that arrives after another transcription was opened', async () => {
+    useStore.setState({ transcriptionStatus: 'failed' })
+    let resolveFirst!: (s: TranscriptionStatus) => void
+    vi.mocked(api.getStatus).mockReturnValueOnce(new Promise((r) => { resolveFirst = r }))
+    render(<TranscriptionProgressCard />)
+
+    // The second transcription's own reason never arrives in this test.
+    vi.mocked(api.getStatus).mockReturnValue(new Promise(() => {}))
+    act(() => useStore.setState({ transcriptionId: 't2', transcriptionStatus: 'failed' }))
+    await act(async () => resolveFirst({ id: 't1', status: 'failed', progress: null, error: 'x', error_code: 'timeout' }))
+
+    expect(screen.queryByText(germanDetail('transcription.errors.timeout'))).toBeNull()
+    expect(api.getStatus).toHaveBeenLastCalledWith('t2')
   })
 
   it('shows the language hint for an already failed Auto-detect transcription', async () => {
