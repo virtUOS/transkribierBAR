@@ -20,8 +20,10 @@ with open(
 ) as _f:
     INSTRUCTIONS = _f.read().strip()
 
+# Only these descriptions reach the model, never the view ids: the overview's id
+# "archive" made the model answer that Archivieren is not possible there.
 VIEW_DESCRIPTIONS: dict[str, str] = {
-    "archive": "the overview of the user's files and transcriptions",
+    "archive": "the Übersicht, the start page listing the user's transcriptions",
     "upload": "uploading a file and choosing transcription settings",
     "record": "recording audio or video in the browser",
     "detail": "one transcription opened in the editor",
@@ -30,6 +32,17 @@ VIEW_DESCRIPTIONS: dict[str, str] = {
 }
 
 ERROR_MESSAGE_MAX = 300
+
+# The situation ends with exactly one of these. Left to the instructions, the
+# model applied "tell them to open it" even with the transcription open.
+NO_OPEN_TRANSCRIPTION_NOTE = (
+    "- No transcription is open, so you cannot see one. If the user asks why a transcription failed, "
+    "tell them to open it and ask again from its page; do not list error codes."
+)
+OPEN_TRANSCRIPTION_NOTE = (
+    "- The user has this transcription open and you see it above. Answer from it, with what the Handbuch "
+    "says to do next; never tell them to open it or to ask you again."
+)
 
 # Filled manual per language; set by app.main at startup, tests may replace it.
 CORPORA: dict[Lang, str] = {}
@@ -82,7 +95,7 @@ def build_system_prompt(lang: Lang, view: str, situation: dict | None) -> str:
     )
     lines = [
         f"- Interface language: {'German' if lang == 'de' else 'English'}",
-        f"- Current view: {view} ({VIEW_DESCRIPTIONS.get(view, view)})",
+        f"- Current view: {VIEW_DESCRIPTIONS.get(view, view)}",
     ]
     if situation:
         lines.append(f"- Open transcription status: {situation['status']}")
@@ -98,6 +111,7 @@ def build_system_prompt(lang: Lang, view: str, situation: dict | None) -> str:
             lines.append(f"- Detected language: {situation['detected_language']}")
         if situation.get("model"):
             lines.append(f"- Speech recognition model: {situation['model']}")
+    lines.append(OPEN_TRANSCRIPTION_NOTE if situation else NO_OPEN_TRANSCRIPTION_NOTE)
     # The situation goes last: instructions + manual are identical for every request
     # of one language, so the LLM server's prefix cache can reuse them.
     return (

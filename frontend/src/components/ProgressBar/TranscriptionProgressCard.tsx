@@ -38,7 +38,20 @@ export function TranscriptionProgressCard({
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const doneRef = useRef(false)
   // Kept as received and translated when rendered, so a language switch applies.
-  const [failure, setFailure] = useState<{ code?: string | null; message?: string | null } | null>(null)
+  // Tagged with its transcription, so another transcription never shows it.
+  const [failureOf, setFailureOf] = useState<{ id: string; code?: string | null; message?: string | null } | null>(null)
+  const failure = failureOf && failureOf.id === transcriptionId ? failureOf : null
+
+  // A transcription opened from the overview is already failed: no socket
+  // reports its reason, so fetch it once.
+  useEffect(() => {
+    if (!transcriptionId || status !== 'failed' || failure) return
+    let cancelled = false
+    api.getStatus(transcriptionId).then((s) => {
+      if (!cancelled && s.status === 'failed') setFailureOf({ id: transcriptionId, code: s.error_code, message: s.error })
+    }).catch(() => { /* the card still says that it failed */ })
+    return () => { cancelled = true }
+  }, [transcriptionId, status, failure])
 
   useEffect(() => {
     if (!transcriptionId || status === 'completed' || status === 'failed') return
@@ -79,7 +92,7 @@ export function TranscriptionProgressCard({
     const handleFailed = (code?: string | null, message?: string | null) => {
       markDone()
       setStatus('failed')
-      setFailure({ code, message })
+      setFailureOf({ id: transcriptionId, code, message })
     }
 
     const connect = () => {

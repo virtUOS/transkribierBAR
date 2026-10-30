@@ -24,9 +24,15 @@ export function InvitationsSection() {
     }
   }, [])
 
+  // The first load sets state only once the list has arrived
   useEffect(() => {
-    fetchInvitations()
-  }, [fetchInvitations])
+    let current = true
+    api.listInvitations()
+      .then((result) => { if (current) setInvitations(result) })
+      .catch((e) => { if (current) setError((e as Error).message) })
+      .finally(() => { if (current) setLoading(false) })
+    return () => { current = false }
+  }, [])
 
   async function handleCreate(email: string) {
     await api.createInvitation(email)

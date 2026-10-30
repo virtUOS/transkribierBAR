@@ -4,7 +4,7 @@ import i18n from './i18n'
 import { useStore } from './store'
 import { api, ApiError } from './api/client'
 import App from './App'
-import type { ConfigResponse, PresetBundle, PresetBundleExpanded, TranscriptionPreset } from './api/types'
+import type { ConfigResponse, PresetBundle, PresetBundleExpanded, TranscriptionListItem, TranscriptionPreset } from './api/types'
 
 vi.mock('./api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api/client')>()
@@ -19,6 +19,9 @@ vi.mock('./api/client', async (importOriginal) => {
       getDefaultBundle: vi.fn(),
       promptBudget: vi.fn(),
       startTranscription: vi.fn(),
+      getStatus: vi.fn(),
+      connectWebSocket: vi.fn(() => ({ close: vi.fn() })),
+      listTranscriptions: vi.fn(() => Promise.resolve([])),
     },
   }
 })
@@ -178,5 +181,129 @@ describe('Upload settings and the prompt budget', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Transcribe' }))
 
     expect(await screen.findByText('Initial prompt and hotwords together are too long. Please shorten them.')).toBeInTheDocument()
+  })
+})
+
+describe('A failed transcription opened from the overview', () => {
+  const failedItem: TranscriptionListItem = {
+    id: 't1', file_id: 'f1', original_filename: 'talk.mp3', status: 'failed', language: null, model: 'base',
+    created_at: '2026-10-30T08:00:00Z', file_size: 1, expires_at: '2026-11-02T08:00:00Z', archived: false,
+    title: 'Old title', has_video: false,
+  }
+
+  it('offers Try again, which returns to the settings for the same file', async () => {
+    serve([])
+    vi.mocked(api.promptBudget).mockResolvedValue({ tokens: 0, limit: 223 })
+    vi.mocked(api.getStatus).mockResolvedValue({
+      id: 't1', status: 'failed', progress: null, error: 'ASR job exceeded 1800s', error_code: 'timeout',
+    })
+    useStore.setState({
+      currentView: 'detail',
+      transcriptionId: 't1',
+      transcriptionStatus: 'failed',
+      transcriptionTitle: 'Old title',
+      transcriptionHistory: [failedItem],
+    })
+    render(<App />)
+
+    expect(await screen.findByText(
+      'Error message: The speech recognition did not finish this transcription within the time limit.',
+    )).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+    const transcribe = await screen.findByRole('button', { name: 'Transcribe' })
+    const state = useStore.getState()
+    expect(state.currentView).toBe('upload')
+    expect(state.transcriptionId).toBeNull()
+    expect(state.transcriptionStatus).toBeNull()
+    expect(state.transcriptionTitle).toBeNull()
+    expect(state.file?.id).toBe('f1')
+    expect(screen.getByText('talk.mp3')).toBeInTheDocument()
+
+    // The same file is transcribed again, without a new upload.
+    await waitFor(() => expect(transcribe).toBeEnabled())
+    vi.mocked(api.startTranscription).mockResolvedValue({ id: 't2', status: 'pending' })
+    fireEvent.click(transcribe)
+    await waitFor(() => expect(api.startTranscription).toHaveBeenCalledWith(expect.objectContaining({ file_id: 'f1' })))
+  })
+
+  it('goes to the overview, not an empty page, on Back after Try again', async () => {
+    serve([])
+    vi.mocked(api.promptBudget).mockResolvedValue({ tokens: 0, limit: 223 })
+    vi.mocked(api.getStatus).mockResolvedValue({
+      id: 't1', status: 'failed', progress: null, error: 'x', error_code: 'timeout',
+    })
+    useStore.setState({
+      currentView: 'detail', transcriptionId: 't1', transcriptionStatus: 'failed', transcriptionHistory: [failedItem],
+    })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+    await screen.findByRole('button', { name: 'Transcribe' })
+
+    act(() => { window.dispatchEvent(new PopStateEvent('popstate', { state: { view: 'detail' } })) })
+
+    expect(useStore.getState().currentView).toBe('archive')
+  })
+})
+
+describe('Transcribing while the upload runs', () => {
+  const talk = { id: 'f2', original_filename: 'lecture.mp3', media_type: 'audio/mpeg', file_size: 2048, has_video: false }
+
+  it('starts the transcription once, when the file lands', async () => {
+    serve([])
+    vi.mocked(api.startTranscription).mockResolvedValue({ id: 't1', status: 'pending' })
+    useStore.setState({ file: null, uploading: true })
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Transcribe when ready' }))
+    expect(api.startTranscription).not.toHaveBeenCalled()
+
+    act(() => useStore.setState({ file: talk, uploading: false }))
+
+    await waitFor(() => expect(api.startTranscription).toHaveBeenCalledTimes(1))
+    expect(api.startTranscription).toHaveBeenCalledWith(expect.objectContaining({ file_id: 'f2' }))
+    expect(await screen.findByText('lecture.mp3')).toBeInTheDocument()
+    act(() => useStore.setState({ uploading: false }))
+    expect(api.startTranscription).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses the configured default model once the configuration arrives', async () => {
+    serve([])
+    vi.mocked(api.getConfig).mockResolvedValue({ ...config, default_model: 'large-v3' })
+    vi.mocked(api.startTranscription).mockResolvedValue({ id: 't1', status: 'pending' })
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Transcribe' }))
+
+    await waitFor(() => expect(api.startTranscription).toHaveBeenCalled())
+    expect(api.startTranscription).toHaveBeenCalledWith(expect.objectContaining({ model: 'large-v3' }))
+  })
+
+  it('drops a transcription still running when the person goes to the overview', async () => {
+    serve([])
+    useStore.setState({ transcriptionId: 'running', transcriptionStatus: 'processing' })
+    render(<App />)
+    await waitFor(() => expect(useStore.getState().config).not.toBeNull())
+    expect(useStore.getState().transcriptionId).toBe('running')
+
+    act(() => useStore.getState().setCurrentView('archive'))
+
+    expect(useStore.getState().transcriptionId).toBeNull()
+    expect(useStore.getState().transcriptionStatus).toBeNull()
+  })
+
+  it('forgets a failed start when the person leaves the upload view', async () => {
+    serve([])
+    vi.mocked(api.startTranscription).mockRejectedValue(new Error('Server unavailable'))
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Transcribe' }))
+    expect(await screen.findByText('Server unavailable')).toBeInTheDocument()
+
+    act(() => useStore.getState().setCurrentView('archive'))
+    act(() => useStore.getState().setCurrentView('upload'))
+
+    expect(screen.queryByText('Server unavailable')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Transcribe' })).toBeInTheDocument()
   })
 })

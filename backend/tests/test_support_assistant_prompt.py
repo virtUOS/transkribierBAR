@@ -10,14 +10,43 @@ def corpora(monkeypatch):
     monkeypatch.setattr(sa, "CORPORA", {"de": "HANDBUCH-DE", "en": "MANUAL-EN"})
 
 
+def test_view_line_names_the_view_without_its_internal_id():
+    # The overview's id "archive" read as the Archivieren feature: the model
+    # answered "archiving is not possible here" on the overview.
+    p = sa.build_system_prompt("de", "archive", None)
+    view_line = next(line for line in p.splitlines() if line.startswith("- Current view:"))
+    assert view_line.startswith("- Current view: the Übersicht")
+    assert "archive" not in view_line.lower()
+
+
+def test_situation_ends_with_the_note_for_no_open_transcription():
+    p = sa.build_system_prompt("de", "upload", None)
+    assert p.rstrip().splitlines()[-1] == sa.NO_OPEN_TRANSCRIPTION_NOTE
+    assert sa.OPEN_TRANSCRIPTION_NOTE not in p
+
+
+def test_situation_ends_with_the_note_for_an_open_transcription():
+    situation = {"status": "failed", "error_code": "timeout", "error_message": "x",
+                 "language": None, "detected_language": None, "model": "large-v3"}
+    p = sa.build_system_prompt("de", "detail", situation)
+    assert p.rstrip().splitlines()[-1] == sa.OPEN_TRANSCRIPTION_NOTE
+    assert sa.NO_OPEN_TRANSCRIPTION_NOTE not in p
+
+
+def test_open_transcription_note_leaves_the_handbuch_retry_allowed():
+    # The Handbuch describes Try again on a failed transcription's page.
+    assert "retry" not in sa.OPEN_TRANSCRIPTION_NOTE.lower()
+    assert "what the Handbuch says to do next" in sa.OPEN_TRANSCRIPTION_NOTE
+
+
 def test_prompt_contains_instructions_view_and_manual():
     p = sa.build_system_prompt("de", "upload", None)
     assert 'You are the "Assistent" of transkribierBAR' in p
-    assert "Current view: upload (uploading a file" in p
+    assert "Current view: uploading a file" in p
     assert "Interface language: German" in p
     assert "## Handbuch\n\nHANDBUCH-DE\n\n## Situation\n" in p
     assert p.index("HANDBUCH-DE") < p.index("## Situation")
-    assert p.rstrip().splitlines()[-1].startswith("- Current view:")
+    assert p.rstrip().splitlines()[-1] == sa.NO_OPEN_TRANSCRIPTION_NOTE
     assert "MANUAL-EN" not in p
     assert "Open transcription" not in p
 

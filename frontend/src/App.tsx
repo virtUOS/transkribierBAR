@@ -197,16 +197,16 @@ function MainApp() {
     showAdvanced: false,
   })
 
-  const configModelApplied = useRef(false)
-  useEffect(() => {
-    if (!config || configModelApplied.current) return
-    const models = config.whisper_models ?? []
-    const model = resolveModel(models, config.default_model)
-    if (!model) return
-    configModelApplied.current = true
-    // A preset loaded before the configuration arrived (the default bundle's) has chosen the model
-    setSettings((s) => (s.selectedPresetId ? s : { ...s, model }))
-  }, [config])
+  // Applied once, while rendering the configuration's arrival rather than in an effect after it
+  const [configModelApplied, setConfigModelApplied] = useState(false)
+  if (config && !configModelApplied) {
+    const model = resolveModel(config.whisper_models ?? [], config.default_model)
+    if (model) {
+      setConfigModelApplied(true)
+      // A preset loaded before the configuration arrived (the default bundle's) has chosen the model
+      setSettings((s) => (s.selectedPresetId ? s : { ...s, model }))
+    }
+  }
 
   const updateSettings = useCallback((patch: Partial<SettingsPanelValues>) => {
     setSettings((s) => ({ ...s, ...patch }))
@@ -270,7 +270,10 @@ function MainApp() {
       }
       setPopStateFlag(true)
       isPopStateNav.current = true
-      setCurrentView(e.state?.view ?? 'archive')
+      const view = e.state?.view ?? 'archive'
+      // A detail entry whose transcription was closed (Try again, a reset)
+      // would show an empty page.
+      setCurrentView(view === 'detail' && !state.transcriptionId ? 'archive' : view)
       setPopStateFlag(false)
     }
     window.addEventListener('popstate', handlePopState)
@@ -476,22 +479,14 @@ function MainApp() {
     }
   }, [settings, t])
 
+  // "Transcribe when ready": the upload finishes in the store, outside React, so start the
+  // transcription from the store's change. handleTranscribe also fills in the file's name and size.
   useEffect(() => {
-    if (pendingTranscription && file) {
-      handleTranscribe()
-    }
-  }, [file, pendingTranscription, handleTranscribe])
-
-  useEffect(() => {
-    if (pendingTranscription && file && submittedSummary) {
-      setSubmittedSummary({
-        ...submittedSummary,
-        filename: file.original_filename,
-        fileSize: file.file_size,
-      })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when file lands while pending
-  }, [file, pendingTranscription])
+    if (!pendingTranscription) return
+    return useStore.subscribe((state, previous) => {
+      if (state.file && !previous.file) handleTranscribe()
+    })
+  }, [pendingTranscription, handleTranscribe])
 
   const handleTryAgain = useCallback(() => {
     useStore.getState().setTranscriptionId(null)
@@ -500,6 +495,16 @@ function MainApp() {
     setSubmitError(null)
     setSubmittedSummary(null)
   }, [])
+
+  // A failed transcription opened from the overview: to the upload settings for
+  // its file, which is still on the server, to transcribe it again.
+  const handleRetryFailed = useCallback(() => {
+    const state = useStore.getState()
+    state.clearTranscriptionState()
+    state.setTranscriptionTitle(null)
+    handleTryAgain()
+    state.setCurrentView('upload')
+  }, [handleTryAgain])
 
   const inSubmittedState =
     (transcriptionId !== null && transcriptionStatus !== 'completed')
@@ -520,18 +525,24 @@ function MainApp() {
 
   const transcribeDisabled = (!file && !uploading) || submitting || isOverPromptBudget(promptBudget)
 
-  useEffect(() => {
+  // Leaving Upload/Record drops what was submitted there: reset while rendering the new view
+  const [submissionView, setSubmissionView] = useState(currentView)
+  if (submissionView !== currentView) {
+    setSubmissionView(currentView)
     if (currentView !== 'upload' && currentView !== 'record') {
       setPendingTranscription(false)
       setSubmittedSummary(null)
       setSubmitError(null)
-      if (currentView !== 'detail') {
-        const { transcriptionStatus: status } = useStore.getState()
-        if (status !== null && status !== 'completed') {
-          useStore.getState().setTranscriptionId(null)
-          useStore.getState().setTranscriptionStatus(null)
-        }
-      }
+    }
+  }
+
+  // ...and, except for the detail view, a transcription still running in the store
+  useEffect(() => {
+    if (currentView === 'upload' || currentView === 'record' || currentView === 'detail') return
+    const { transcriptionStatus: status } = useStore.getState()
+    if (status !== null && status !== 'completed') {
+      useStore.getState().setTranscriptionId(null)
+      useStore.getState().setTranscriptionStatus(null)
     }
   }, [currentView])
 
@@ -671,6 +682,7 @@ function MainApp() {
           <DetectedLanguage requested={transcriptionResult?.language} detected={transcriptionResult?.detected_language} />
           <DetailActions />
           <TranscriptionProgressCard
+            onTryAgain={handleRetryFailed}
             autoLanguage={transcriptionHistory.find((h) => h.id === transcriptionId)?.language === null}
           />
           {pipelineStatus && (
