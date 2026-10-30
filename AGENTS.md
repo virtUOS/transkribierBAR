@@ -87,7 +87,9 @@ Four layers, all run in CI on every pull request:
   Add an e2e test for a new user-facing flow; keep edge cases in the unit layers. Everything
   runs in Chromium; `recorder.spec.ts` also runs in Firefox, since the recorder adapts to
   the browser. Both get fake media devices. The projects deliberately use no Playwright
-  device presets, which would replace the user agent with a Windows one.
+  device presets, which would replace the user agent with a Windows one. Firefox mixes the
+  recorder's inputs only with an audio output, so CI gives the runner a PulseAudio null
+  sink; the recorder tests check that the recording is not silent.
 - **Container smoke test** (`scripts/smoke-test-image.sh <image>`): starts the built
   image and checks the API, the SPA fallback and `/handbuch/`, including that no
   build-time placeholder of the guide is left in the page.
