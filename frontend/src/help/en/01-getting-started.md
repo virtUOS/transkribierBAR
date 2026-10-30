@@ -9,7 +9,7 @@ You start in the overview of your transcriptions. From there you upload a file o
 ## Your first transcription
 
 1. In the overview, click **+ Upload** and choose an audio or video file. Or click **+ Record** to record in the browser; when you stop, transkribierBAR uploads the recording automatically. **+ Record** only appears if your browser supports recording.
-2. Choose the **Transcription language**. The default is **Auto-detect**. The **Model** is fixed: {{default_model}}.
+2. Choose the **Transcription language**. The default is **Auto-detect**. Under **Quality**, choose the model; the default is {{default_model}}. If your installation offers only one model, the field is named **Model** and shows it.
 3. **Detect speakers** is on and separates the contributions of different people. If only one person speaks, you can turn it off.
 4. Click **Transcribe**. If the upload is still running, the button reads **Transcribe when ready**; the transcription then starts by itself once the file is uploaded.
 5. Wait until the transcription is done. The status shows **Queued…** while it waits and **Transcribing…** while it runs.

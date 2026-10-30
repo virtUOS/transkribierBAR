@@ -36,7 +36,7 @@ In **Upload** and **Record**, the **Bundles** field in the **Presets** group app
 
 ## Default bundle
 
-The star on a bundle's card makes it the default. The star on the default bundle removes the default again. You can have only one default bundle. The app preselects it when it opens. This does not apply its transcription preset to the settings yet. The section "Upload" explains that.
+The star on a bundle's card makes it the default. The star on the default bundle removes the default again. You can have only one default bundle. The app preselects it when it opens and applies its transcription preset to the settings. The section "Upload" explains the details.
 
 ## Bundle or manual steps?
 

@@ -19,7 +19,7 @@ If the recording has no detected speakers, the panel shows **No speakers detecte
 
 The panel lists each speaker with the name that is currently shown. Without a name of your own, that is the stored label, for example `SPEAKER_00`. Enter a new name in the field to its right and click **Apply**. Fields you leave empty (**New name (leave empty to keep)**) keep their name. transkribierBAR removes spaces at the start and end of the name. **Cancel** closes the panel without any change.
 
-The new name then appears in the table, for videos in the player's subtitle track and in the **SRT**, **VTT**, **JSON** and **TXT** tabs including their downloads. This holds for the original and for a translation made from the original. **Refined** keeps the names that were in force when the refinement was made, and so does a translation made from it. Once you have named speakers, the field suggests those names.
+The new name then appears in the table, for videos in the player's subtitle track and in the **SRT**, **VTT**, **JSON** and **TXT** tabs including their downloads. This holds for the original, for **Refined** and for a translation, whichever of the two it was made from. Once you have named speakers, the field suggests those names.
 
 ## Merging speakers
 

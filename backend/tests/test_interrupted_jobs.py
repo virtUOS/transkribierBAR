@@ -44,6 +44,22 @@ async def test_interrupted_rows_marked_failed():
 
 
 @pytest.mark.asyncio
+async def test_interrupted_rows_carry_the_restart_code():
+    """The web interface translates the code; the English message stays for API clients."""
+    async with get_db() as db:
+        await db.execute("INSERT INTO transcriptions (id, status) VALUES ('t-processing', 'processing')")
+        await db.execute("INSERT INTO transcriptions (id, status) VALUES ('t-completed', 'completed')")
+        await db.commit()
+
+    await fail_interrupted_transcriptions()
+
+    async with get_db() as db:
+        cursor = await db.execute("SELECT id, error_code FROM transcriptions")
+        codes = {r["id"]: r["error_code"] for r in await cursor.fetchall()}
+    assert codes == {"t-processing": "server_restarted", "t-completed": None}
+
+
+@pytest.mark.asyncio
 async def test_interrupted_llm_markers_cleared():
     async with get_db() as db:
         await db.execute(

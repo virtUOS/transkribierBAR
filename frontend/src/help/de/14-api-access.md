@@ -8,7 +8,7 @@ Ein Token gehört zu Ihrem Konto. Ein Skript, das ihn verwendet, sieht und ände
 
 ## Token erstellen
 
-Klicken Sie in der Kopfzeile auf **Einstellungen**. Klicken Sie im Bereich **API-Tokens** auf **Token erstellen**. Geben Sie einen **Namen** ein, der Ihnen sagt, wo Sie den Token verwenden, zum Beispiel den Namen des Skripts. Wählen Sie unter **Läuft ab** eine der Optionen **30 Tage**, **90 Tage** oder **365 Tage**. Jeder Token läuft ab; die Standard-Gültigkeit beträgt {{api_token_expiry_days}} Tage. Klicken Sie auf **Erstellen**.
+Klicken Sie in der Kopfzeile auf **Einstellungen**. Klicken Sie im Bereich **API-Tokens** auf **Token erstellen**. Geben Sie einen **Namen** ein, der Ihnen sagt, wo Sie den Token verwenden, zum Beispiel den Namen des Skripts. Wählen Sie unter **Läuft ab**, wie lange der Token gültig bleibt. Die Liste bietet **30 Tage**, **90 Tage** und **365 Tage** und immer auch die Standard-Gültigkeit von {{api_token_expiry_days}} Tagen, die vorausgewählt ist. Jeder Token läuft ab. Klicken Sie auf **Erstellen**.
 
 Der Name darf bis zu 64 Zeichen lang sein. Unter Ihren aktiven Tokens darf jeder Name nur einmal vorkommen. Die Zahl der aktiven Tokens pro Person ist begrenzt. Haben Sie sie erreicht, wird ein weiterer Token mit einer Fehlermeldung im Dialog abgelehnt. Widerrufen Sie dann zuerst einen Token, den Sie nicht mehr brauchen.
 
@@ -24,9 +24,11 @@ Der Bereich **API-Tokens** listet Ihre Tokens auf.
 
 1. **Token erstellen** öffnet den oben beschriebenen Dialog.
 2. Ein Token mit seinem Namen, seinen ersten Zeichen mit angehängtem „…“, dem Status (**Aktiv**, **Abgelaufen** oder **Widerrufen**), seinem Ablaufdatum und, sobald er verwendet wurde, dem Zeitpunkt der letzten Verwendung.
-3. **Widerrufen** neben einem aktiven Token widerruft ihn. Ab dann weist der Server jede neue Anfrage mit ihm ab.
+3. **Widerrufen** neben einem aktiven oder abgelaufenen Token widerruft ihn. Ab dann weist der Server jede neue Anfrage mit ihm ab.
 
 Abgelaufene und widerrufene Tokens bleiben abgeblendet in der Liste. Sie werden automatisch daraus entfernt, widerrufene nach 30 Tagen und abgelaufene nach 90 Tagen.
+
+Bevor ein Token abläuft, nennt ihn ein Hinweis über der Liste, und die Schaltfläche **Einstellungen** in der Kopfzeile zeigt einen orangen Punkt. Der Hinweis erscheint 14 Tage vor dem Ablauf, bei einem nur kurz gültigen Token 3 Tage oder 1 Tag vorher, und er bleibt 14 Tage nach dem Ablauf stehen. Für einen Token, der 1 Tag gilt, erscheint der Hinweis erst nach dem Ablauf. Widerrufen Sie einen Token, verschwindet sein Hinweis, auch wenn der Token schon abgelaufen ist; ist kein Hinweis mehr übrig, verschwindet auch der Punkt. Ein Token lässt sich nicht verlängern: Erstellen Sie einen neuen und ersetzen Sie den alten in Ihren Skripten. Ist dieser Dienst für den Versand von E-Mails eingerichtet, erhalten Sie außerdem Erinnerungen an die E-Mail-Adresse Ihres Logins, 14, 3 und 1 Tag vor dem Ablauf; bei einem nur kurz gültigen Token entfallen die frühen, und ein Token, der 1 Tag gilt, erhält keine.
 
 ## Authentifizierung
 
@@ -72,11 +74,13 @@ Die Antwort enthält die `id` der Transkription (`TRANSCRIPTION_ID`) und den Sta
 | `file_id` | Pflicht. Die `id` aus dem Upload. |
 | `language` | Sprachcode wie `de`. Ohne dieses Feld wird die Sprache automatisch erkannt. |
 | `model` | Das Modell. Siehe den Hinweis unten. |
-| `min_speakers`, `max_speakers` | Mindest- und Höchstzahl der Sprechenden. Ist mindestens eines davon größer als 0, werden Sprechende erkannt. Fehlen beide oder sind sie 0, werden keine Sprechenden erkannt. |
+| `min_speakers`, `max_speakers` | Mindest- und Höchstzahl der Sprechenden. Ist mindestens eines davon größer als 0, werden Sprechende erkannt. Fehlen beide oder sind sie 0, werden keine Sprechenden erkannt. Negative Werte oder eine Höchstzahl (außer 0) unter der Mindestzahl werden abgelehnt. |
 | `initial_prompt` | Optionaler Kontext für die Transkription. |
 | `hotwords` | Optionale Fachbegriffe, durch Kommas getrennt. |
 
-> **Das Modell immer mitsenden.** Diese Installation bietet nur das Modell {{default_model}} an. Der Server prüft das Feld `model` nicht. Lassen Sie es weg, gibt er das Modell `base` an die Spracherkennung weiter, das diese Installation nicht anbietet. Senden Sie deshalb immer `"model": "{{default_model}}"`.
+> **Das Modell.** `model` nennt eines der Modelle, die diese Installation anbietet; das Feld **Qualität** bei **Hochladen** führt sie mit ihren Namen in Klammern auf. Lassen Sie `model` weg, wird das Standardmodell {{default_model}} dieser Installation verwendet. Ein Modell, das diese Installation nicht anbietet, wird mit Status 422 abgelehnt; die Meldung nennt das abgelehnte Modell.
+
+> **Anfangs-Prompt und Schlüsselwörter.** Zusammen dürfen sie höchstens 223 Tokens aus dem Vokabular der Spracherkennung belegen, grob 650 bis 850 Zeichen deutschen Text und weniger in Schriften wie Chinesisch oder Arabisch. Längere Angaben werden mit Status 422 und `"code": "prompt_too_long"` abgelehnt; die Meldung nennt die Zahl der Tokens. Beim Speichern einer Transkriptions-Voreinstellung gilt dieselbe Prüfung. `POST /api/prompt-budget` mit den Feldern `initial_prompt` und `hotwords` antwortet mit `tokens` und `limit` und startet nichts.
 
 **3. Auf das Ergebnis warten.** Fragen Sie den Status ab, bis er `completed` oder `failed` ist:
 
@@ -84,7 +88,9 @@ Die Antwort enthält die `id` der Transkription (`TRANSCRIPTION_ID`) und den Sta
 curl -H "Authorization: Bearer tw_…" https://transcription.uni-osnabrueck.de/api/status/TRANSCRIPTION_ID
 ```
 
-Der Status ist `pending`, `processing`, `completed` oder `failed`. Bei `failed` nennt das Feld `error` den Grund. Statt die Abfrage zu wiederholen, können Sie den WebSocket aus dem Abschnitt „Authentifizierung“ abhören. Er sendet alle 5 Sekunden eine Nachricht wie `{"type": "status", "status": "processing"}` und schließt sich nach `completed` oder `failed`. Bei einem ungültigen Token schließt er mit dem Code 4001. Gibt es die Transkription nicht oder gehört sie Ihnen nicht, schließt er mit dem Code 4003.
+Der Status ist `pending`, `processing`, `completed` oder `failed`. Bei `failed` nennt das Feld `error` den Grund, und `error_code` bezeichnet ihn mit einem festen Code: `server_restarted` (der Server wurde während der Transkription neu gestartet), `timeout` (die Spracherkennung ist nicht innerhalb des Zeitlimits fertig geworden), `asr_unreachable` (die Anfrage an die Spracherkennung ist fehlgeschlagen), `asr_failed` (die Spracherkennung hat einen Fehler gemeldet) oder `unknown` (ein anderer Grund, den nur `error` beschreibt). Ist kein Code gespeichert, ist `error_code` `null`.
+
+Statt die Abfrage zu wiederholen, können Sie den WebSocket aus dem Abschnitt „Authentifizierung“ abhören. Er sendet alle 5 Sekunden eine Nachricht wie `{"type": "status", "status": "processing"}` und schließt sich nach `failed`. Hat die Transkription schon einen Titel, enthält die Nachricht mit `completed` ihn im Feld `title`, und der WebSocket schließt sich. Das Sprachmodell schreibt den Titel allerdings erst nach der Transkription. Solange es noch am Titel arbeitet, bleibt der WebSocket nach `completed` offen und prüft alle 5 Sekunden. Sobald der Versuch beendet ist, sendet er `{"type": "title", "title": "…"}`, falls dabei ein Titel entstanden ist, und schließt sich. Spätestens wenn das Zeitlimit des Sprachmodells seit dem Abschluss der Transkription verstrichen ist, schließt er sich. Ohne Sprachmodell und bei einer Transkription ohne Text schließt er sich direkt nach `completed`. Bei einem ungültigen Token schließt er mit dem Code 4001. Gibt es die Transkription nicht oder gehört sie Ihnen nicht, schließt er mit dem Code 4003.
 
 **4. Ergebnis abrufen.** Solange die Transkription nicht fertig ist, beantwortet der Server diesen Aufruf mit dem Status 400:
 
@@ -92,7 +98,7 @@ Der Status ist `pending`, `processing`, `completed` oder `failed`. Bei `failed` 
 curl -H "Authorization: Bearer tw_…" https://transcription.uni-osnabrueck.de/api/transcription/TRANSCRIPTION_ID
 ```
 
-Die Antwort enthält die Äußerungen (`utterances`, jeweils mit `start` und `end` in Millisekunden, `text` und `speaker`), den gesamten Text (`text`), die Sprache (`language`) und die Namen der Sprechenden (`speaker_mappings`). Für eine fertige Datei hängen Sie stattdessen `/export/txt`, `/export/srt`, `/export/vtt` oder `/export/json` an die Adresse an.
+Die Antwort enthält die Äußerungen (`utterances`, jeweils mit `start` und `end` in Millisekunden, `text` und `speaker`), den gesamten Text (`text`), die angeforderte Sprache (`language`, `null` bei automatischer Erkennung), die von der Spracherkennung gemeldete Sprache (`detected_language`, `null`, wenn keine gespeichert ist) und die Namen der Sprechenden (`speaker_mappings`). Für eine fertige Datei hängen Sie stattdessen `/export/txt`, `/export/srt`, `/export/vtt` oder `/export/json` an die Adresse an.
 
 ## Grenzen
 

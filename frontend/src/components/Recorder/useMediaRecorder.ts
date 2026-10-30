@@ -18,6 +18,7 @@ interface UseMediaRecorderReturn {
   stream: MediaStream | null
   duration: number
   error: string | null
+  hasVideo: boolean
   start: () => Promise<void>
   pause: () => void
   resume: () => void
@@ -44,9 +45,11 @@ export function useMediaRecorder(options: UseMediaRecorderOptions = {}): UseMedi
   const [duration, setDuration] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [stream, setStream] = useState<MediaStream | null>(null)
+  const [hasVideo, setHasVideo] = useState(false)
 
   const recorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const cameraStreamRef = useRef<MediaStream | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const startTimeRef = useRef(0)
@@ -69,6 +72,8 @@ export function useMediaRecorder(options: UseMediaRecorderOptions = {}): UseMedi
     }
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
+    cameraStreamRef.current?.getTracks().forEach((t) => t.stop())
+    cameraStreamRef.current = null
     displayStreamRef.current?.getTracks().forEach((t) => t.stop())
     displayStreamRef.current = null
     secondStreamRef.current?.getTracks().forEach((t) => t.stop())
@@ -89,6 +94,7 @@ export function useMediaRecorder(options: UseMediaRecorderOptions = {}): UseMedi
       }
       if (timerRef.current) clearInterval(timerRef.current)
       streamRef.current?.getTracks().forEach((t) => t.stop())
+      cameraStreamRef.current?.getTracks().forEach((t) => t.stop())
       if (displayEndedHandlerRef.current) {
         const displayTrack = displayStreamRef.current?.getAudioTracks()[0]
         const secondTrack = secondStreamRef.current?.getAudioTracks()[0]
@@ -126,9 +132,13 @@ export function useMediaRecorder(options: UseMediaRecorderOptions = {}): UseMedi
 
   const start = useCallback(async () => {
     if (recorderRef.current && recorderRef.current.state !== 'inactive') return
+    // A recorder that is still active returned above, so only leftovers of a
+    // failed earlier attempt can be open here; stop them instead of overwriting.
+    stopAllTracks()
     discardingRef.current = false
     setError(null)
     setBlob(null)
+    setHasVideo(false)
     chunksRef.current = []
     resetTimer()
 
@@ -215,6 +225,7 @@ export function useMediaRecorder(options: UseMediaRecorderOptions = {}): UseMedi
             : true
           try {
             cameraStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraint })
+            cameraStreamRef.current = cameraStream
           } catch (err) {
             // Camera isn't usable (denied, missing, or otherwise). Since the mic
             // already opened successfully, continue with audio-only recording
@@ -344,6 +355,8 @@ export function useMediaRecorder(options: UseMediaRecorderOptions = {}): UseMedi
 
       recorderRef.current = recorder
       recorder.start(1000)
+      // Only once the recorder runs, so a failed start never reports video
+      setHasVideo(hasVideo)
       setState('recording')
       startTimer()
     } catch (err) {
@@ -354,6 +367,8 @@ export function useMediaRecorder(options: UseMediaRecorderOptions = {}): UseMedi
       } else {
         setError('micRequired')
       }
+      // Release anything opened before the failure (e.g. MediaRecorder threw).
+      stopAllTracks()
     }
   }, [options.audioDeviceId, options.videoDeviceId, options.useCamera, options.captureSystemAudio, options.secondAudioDeviceId, options.useMicrophone, resetTimer, startTimer, pauseTimer, stopAllTracks])
 
@@ -387,13 +402,14 @@ export function useMediaRecorder(options: UseMediaRecorderOptions = {}): UseMedi
     }
     stopAllTracks()
     setBlob(null)
+    setHasVideo(false)
     chunksRef.current = []
     resetTimer()
     setState('idle')
     setError(null)
   }, [stopAllTracks, resetTimer])
 
-  return { state, blob, stream, duration, error, start, pause, resume, stop, discard }
+  return { state, blob, stream, duration, error, hasVideo, start, pause, resume, stop, discard }
 }
 
 export { getFileExtension, getPreferredMimeType }

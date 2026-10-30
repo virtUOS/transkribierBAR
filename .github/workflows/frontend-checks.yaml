@@ -13,12 +13,23 @@ jobs:
       contents: read
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      # Dependabot bumps the base image on its own; the PR stays red until
+      # frontend/.node-version (and with it CI) moves to the same version.
+      - name: Check that the Dockerfile uses the same Node.js
+        run: |
+          want=$(cat frontend/.node-version)
+          have=$(sed -n 's/^FROM node:\([0-9.]*\)-.*/\1/p' Dockerfile)
+          if [ "$have" != "$want" ]; then
+            echo "::error file=Dockerfile::Dockerfile uses Node.js $have, frontend/.node-version says $want"
+            exit 1
+          fi
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 26
+          node-version-file: frontend/.node-version
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -36,4 +47,5 @@ jobs:
 
       - name: Test
         working-directory: frontend
-        run: npm test
+        # Fails below the coverage thresholds in vitest.config.ts.
+        run: npm run test:coverage

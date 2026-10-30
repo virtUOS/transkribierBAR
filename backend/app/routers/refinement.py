@@ -7,7 +7,6 @@ from app.config import settings
 from app.dependencies import get_current_user
 from app.router_helpers import (
     ensure_transcription_owned,
-    load_speaker_mappings,
     reset_refinement_state,
 )
 from app.models import (
@@ -28,22 +27,6 @@ router = APIRouter()
 # nulling the metadata as a lock would make GET 404 on a reload mid-retry.
 # Revisit if the app ever runs more than one worker.
 _retries_in_flight: set[str] = set()
-
-
-async def _load_mapped_utterances(db, transcription_id: str, result_json: str | None) -> list[dict]:
-    """Original utterances with the user's speaker names applied — what the LLM is sent.
-
-    Shared by the initial refinement and the retry so both send the model the
-    same text for the same utterance.
-    """
-    speaker_map = await load_speaker_mappings(db, transcription_id)
-    mapped = []
-    for u in json.loads(result_json or "[]"):
-        m = dict(u)
-        if m.get("speaker") and m["speaker"] in speaker_map:
-            m["speaker"] = speaker_map[m["speaker"]]
-        mapped.append(m)
-    return mapped
 
 
 def _refinement_is_stale(metadata: RefinementMetadata, original_utterances: list[dict]) -> bool:
@@ -93,7 +76,6 @@ async def refine_transcription(
             raise HTTPException(status_code=400, detail="Transcription not completed")
 
         original_utterances = json.loads(result_json or "[]")
-        mapped_utterances = await _load_mapped_utterances(db, transcription_id, result_json)
 
         await db.execute(
             "UPDATE transcriptions SET refined_utterances_json = '' WHERE id = ? AND user_id = ?",
@@ -102,7 +84,7 @@ async def refine_transcription(
         await db.commit()
 
     context = body.context if body else None
-    transcript_json = json.dumps(mapped_utterances, ensure_ascii=False)
+    transcript_json = json.dumps(original_utterances, ensure_ascii=False)
 
     try:
         async with measure_llm_operation("refinement"):
@@ -190,7 +172,6 @@ async def retry_failed_refinement_chunks(
 
         original_utterances = json.loads(row["result_json"] or "[]")
         refined = json.loads(row["refined_utterances_json"])
-        mapped_utterances = await _load_mapped_utterances(db, transcription_id, row["result_json"])
 
     if transcription_id in _retries_in_flight:
         raise HTTPException(status_code=409, detail="Retry already in progress")
@@ -199,7 +180,7 @@ async def retry_failed_refinement_chunks(
         try:
             async with measure_llm_operation("refinement"):
                 llm_result: LLMRefinementResponse = await provider.generate_refinement(
-                    json.dumps(mapped_utterances, ensure_ascii=False),
+                    json.dumps(original_utterances, ensure_ascii=False),
                     context=metadata.context,
                     ranges=metadata.failed_ranges,
                     previous_summary=metadata.changes_summary,

@@ -5,14 +5,18 @@ import time
 import traceback
 import uuid
 from datetime import datetime, timedelta, timezone
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.concurrency import run_in_threadpool
 from app.config import settings
 from app.dependencies import get_current_user
-from app.router_helpers import ensure_transcription_owned, load_speaker_mappings
+from app.router_helpers import (
+    ensure_transcription_owned, load_speaker_mappings, prompt_too_long_response, resolve_whisper_model,
+)
 from app.models import (
     UserInfo, TranscriptionSettings as TranscriptionSettingsModel,
     TranscriptionStatus, TranscriptionListItem, Utterance, SpeakerMappingRequest,
-    TitleRequest, TranscriptionUpdateRequest,
+    TitleRequest, TranscriptionUpdateRequest, PromptBudgetRequest, PromptBudget,
 )
 from app.database import get_db
 from app.services.asr import get_asr_backend
@@ -20,6 +24,7 @@ from app.services.api_tokens import resolve_token
 from app.services.asr.base import TranscriptionSettings, asr_semaphore
 from app.services.audio import ensure_clean_asr_copy, get_media_duration
 from app.services.formats import generate_srt, generate_vtt, generate_txt
+from app.services.prompt_budget import PROMPT_TOKEN_LIMIT, prompt_tokens
 from app.metrics import (
     inc, observe, gauge_inc, gauge_dec,
     transcriptions_total, transcription_duration_seconds, active_transcriptions,
@@ -36,11 +41,21 @@ from app.metrics import (
 router = APIRouter()
 
 
+@router.post("/api/prompt-budget", response_model=PromptBudget)
+async def get_prompt_budget(req: PromptBudgetRequest, user: UserInfo = Depends(get_current_user)):
+    """How many tokens the initial prompt and hotwords take together, and the limit."""
+    tokens = await run_in_threadpool(prompt_tokens, req.initial_prompt, req.hotwords)
+    return PromptBudget(tokens=tokens, limit=PROMPT_TOKEN_LIMIT)
+
+
 @router.post("/api/transcribe")
 async def start_transcription(
     req: TranscriptionSettingsModel,
     user: UserInfo = Depends(get_current_user),
 ):
+    req.model = resolve_whisper_model(req.model)
+    if too_long := await prompt_too_long_response(req.initial_prompt, req.hotwords):
+        return too_long
     async with get_db() as db:
         cursor = await db.execute(
             "SELECT id, file_path, mp3_path FROM files WHERE id = ? AND user_id = ?",
@@ -93,10 +108,29 @@ def _job_timeout_for(audio_duration: float | None) -> float:
     return job_timeout
 
 
+class ASRJobFailed(RuntimeError):
+    """The ASR server reported the job as failed."""
+
+
+def _error_code_for(e: Exception) -> str:
+    """The stable code stored next to a failure's English message.
+
+    The message stays English because API clients may rely on it; the web
+    interface translates the known codes instead.
+    """
+    if isinstance(e, ASRJobFailed):
+        return "asr_failed"
+    if isinstance(e, TimeoutError):
+        return "timeout"
+    if isinstance(e, httpx.HTTPError):
+        return "asr_unreachable"
+    return "unknown"
+
+
 async def _poll_until_done(backend, asr_job_id: str, audio_duration: float | None) -> None:
     """Poll the ASR backend until the job finishes, or give up.
 
-    Raises RuntimeError if the backend reports failure, or TimeoutError if the job
+    Raises ASRJobFailed if the backend reports failure, or TimeoutError if the job
     stays unfinished past its ceiling. Without the ceiling a backend that keeps
     reporting "processing" with no error would be polled forever.
     """
@@ -108,7 +142,7 @@ async def _poll_until_done(backend, asr_job_id: str, audio_duration: float | Non
         if status.status == "completed":
             return
         elif status.status == "failed":
-            raise RuntimeError(status.error or "Transcription failed")
+            raise ASRJobFailed(status.error or "Transcription failed")
 
         elapsed = time.monotonic() - poll_started
         if elapsed > job_timeout:
@@ -137,6 +171,7 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
         language=req.language, model=req.model,
         min_speakers=req.min_speakers, max_speakers=req.max_speakers,
         initial_prompt=req.initial_prompt, hotwords=req.hotwords,
+        request_id=transcription_id,
     )
 
     gauge_dec(transcription_queue_depth)
@@ -148,6 +183,7 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
         audio_duration = await asyncio.wait_for(get_media_duration(file_path), timeout=5)
     except (asyncio.TimeoutError, Exception):
         audio_duration = None
+    ts.job_timeout = _job_timeout_for(audio_duration)
     if audio_duration is not None:
         observe(transcription_audio_duration_seconds, audio_duration, backend_name)
 
@@ -183,10 +219,12 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
         if speakers:
             inc(diarization_speakers_total, str(min(len(speakers), 20)))
 
+        result_json = json.dumps([u.model_dump() for u in result.utterances])
         async with get_db() as db:
             cursor = await db.execute(
-                """UPDATE transcriptions SET status = ?, result_json = ?, completed_at = ? WHERE id = ?""",
-                ("completed", json.dumps([u.model_dump() for u in result.utterances]),
+                """UPDATE transcriptions SET status = ?, result_json = ?, original_result_json = ?,
+                   detected_language = ?, completed_at = ? WHERE id = ?""",
+                ("completed", result_json, result_json, result.language,
                  datetime.now(timezone.utc).isoformat(), transcription_id),
             )
             await db.commit()
@@ -206,22 +244,34 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
             provider = get_llm_provider()
             if provider and result.utterances:
                 transcript_text = " ".join(u.text for u in result.utterances)
-                title = await _generate_title(provider, transcript_text)
-                if title:
-                    async with get_db() as db:
+                try:
+                    title = await _generate_title(provider, transcript_text)
+                except Exception as e:
+                    logging.warning("Title generation failed for %s: %s", transcription_id, e)
+                    title = ""
+                async with get_db() as db:
+                    if title and title.strip():
                         await db.execute(
-                            "UPDATE transcriptions SET title = ? WHERE id = ?",
+                            "UPDATE transcriptions SET title = ? WHERE id = ? AND title IS NULL",
                             (title, transcription_id),
                         )
-                        await db.commit()
+                    else:
+                        # The status WebSocket waits while the title is NULL; ''
+                        # tells it the attempt is over. The guard keeps a title
+                        # the user set meanwhile. API responses show '' as null.
+                        await db.execute(
+                            "UPDATE transcriptions SET title = '' WHERE id = ? AND title IS NULL",
+                            (transcription_id,),
+                        )
+                    await db.commit()
         except Exception as e:
             logging.warning("Title generation failed for %s: %s", transcription_id, e)
 
     except Exception as e:
         async with get_db() as db:
             cursor = await db.execute(
-                "UPDATE transcriptions SET status = ?, error_message = ? WHERE id = ?",
-                ("failed", str(e), transcription_id),
+                "UPDATE transcriptions SET status = ?, error_message = ?, error_code = ? WHERE id = ?",
+                ("failed", str(e), _error_code_for(e), transcription_id),
             )
             await db.commit()
 
@@ -243,13 +293,26 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
 async def get_status(transcription_id: str, user: UserInfo = Depends(get_current_user)):
     async with get_db() as db:
         cursor = await db.execute(
-            "SELECT id, status, error_message FROM transcriptions WHERE id = ? AND user_id = ?",
+            "SELECT id, status, error_message, error_code FROM transcriptions WHERE id = ? AND user_id = ?",
             (transcription_id, user.id),
         )
         row = await cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Transcription not found")
-    return TranscriptionStatus(id=row["id"], status=row["status"], error=row["error_message"])
+    return TranscriptionStatus(
+        id=row["id"], status=row["status"], error=row["error_message"], error_code=row["error_code"],
+    )
+
+
+def _differs_from_original(result_json: str | None, original_json: str | None) -> bool:
+    """Whether the saved version differs from the stored ASR result.
+
+    Without a stored original (a row that never had a result) nothing counts
+    as edited. Compared as parsed JSON, so serialization differences don't count.
+    """
+    if original_json is None or result_json == original_json:
+        return False
+    return json.loads(result_json or "[]") != json.loads(original_json)
 
 
 @router.get("/api/transcription/{transcription_id}")
@@ -275,7 +338,9 @@ async def get_transcription(transcription_id: str, user: UserInfo = Depends(get_
         "utterances": [u.model_dump() for u in utterances],
         "text": " ".join(u.text for u in utterances),
         "language": row["language"],
+        "detected_language": row["detected_language"],
         "speaker_mappings": speaker_mappings,
+        "edited": _differs_from_original(row["result_json"], row["original_result_json"]),
     }
 
 
@@ -307,7 +372,13 @@ async def export_transcription(transcription_id: str, format_type: str, user: Us
         content = generate_txt(utterances, speaker_map)
         media_type = "text/plain"
     else:
-        content = json.dumps([u.model_dump() for u in utterances], indent=2)
+        content = json.dumps(
+            [
+                {**u.model_dump(), "speaker": speaker_map.get(u.speaker, u.speaker)}
+                for u in utterances
+            ],
+            indent=2,
+        )
         media_type = "application/json"
 
     inc(downloads_total, format_type)
@@ -316,25 +387,43 @@ async def export_transcription(transcription_id: str, format_type: str, user: Us
     return Response(content=content, media_type=media_type)
 
 
+@router.get("/api/transcription/{transcription_id}/original")
+async def get_original_transcription(transcription_id: str, user: UserInfo = Depends(get_current_user)):
+    """The ASR result as first stored, untouched by later saves."""
+    async with get_db() as db:
+        cursor = await db.execute(
+            "SELECT original_result_json FROM transcriptions WHERE id = ? AND user_id = ? AND status = 'completed'",
+            (transcription_id, user.id),
+        )
+        row = await cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Transcription not found")
+    if row["original_result_json"] is None:
+        raise HTTPException(status_code=404, detail="Original transcription not available")
+    return {"utterances": [Utterance(**u).model_dump() for u in json.loads(row["original_result_json"])]}
+
+
 @router.put("/api/transcription/{transcription_id}")
 async def update_transcription(transcription_id: str, body: TranscriptionUpdateRequest, user: UserInfo = Depends(get_current_user)):
     async with get_db() as db:
         cursor = await db.execute(
-            "SELECT id FROM transcriptions WHERE id = ? AND user_id = ? AND status = 'completed'",
+            "SELECT original_result_json FROM transcriptions WHERE id = ? AND user_id = ? AND status = 'completed'",
             (transcription_id, user.id),
         )
-        if not await cursor.fetchone():
+        row = await cursor.fetchone()
+        if not row:
             raise HTTPException(status_code=404, detail="Transcription not found")
 
+        new_json = json.dumps([u.model_dump() for u in body.utterances])
         await db.execute(
             "UPDATE transcriptions SET result_json = ? WHERE id = ?",
-            (json.dumps([u.model_dump() for u in body.utterances]), transcription_id),
+            (new_json, transcription_id),
         )
         await db.commit()
 
     inc(edits_saved_total)
 
-    return {"status": "ok"}
+    return {"status": "ok", "edited": _differs_from_original(new_json, row["original_result_json"])}
 
 
 @router.put("/api/transcription/{transcription_id}/speakers")
@@ -455,7 +544,7 @@ async def list_transcriptions(user: UserInfo = Depends(get_current_user)):
             status=r["status"], language=r["language"], model=r["model"],
             created_at=r["created_at"], file_size=r["file_size"],
             expires_at=r["expires_at"], archived=bool(r["is_archived"]),
-            title=r["title"], has_video=bool(r["has_video"] or 0),
+            title=r["title"] or None, has_video=bool(r["has_video"] or 0),
         ).model_dump()
         for r in rows
     ]
@@ -476,6 +565,57 @@ async def update_title(transcription_id: str, body: TitleRequest, user: UserInfo
         )
         await db.commit()
     return {"status": "ok"}
+
+
+# Seconds between the status WebSocket's checks of the transcription row.
+WS_POLL_SECONDS = 5
+
+
+def _title_wait_left(completed_at: str | None) -> float:
+    """Seconds left of LLM_TIMEOUT, the title request's own limit, since completion.
+
+    A client that connects late waits only for the rest. A row without
+    completed_at gets the whole limit.
+    """
+    try:
+        completed = datetime.fromisoformat(completed_at)
+    except (TypeError, ValueError):
+        return settings.LLM_TIMEOUT
+    if completed.tzinfo is None:
+        completed = completed.replace(tzinfo=timezone.utc)
+    return settings.LLM_TIMEOUT - (datetime.now(timezone.utc) - completed).total_seconds()
+
+
+async def _send_title_when_ready(websocket: WebSocket, transcription_id: str, completed_at: str | None) -> None:
+    """Send the title that _run_transcription asks the LLM for after completion.
+
+    Checks the row at the status loop's interval while its title is NULL, the
+    attempt still running. Sends the title if the attempt stored one ('' means
+    it ended without). Gives up silently once LLM_TIMEOUT has passed since
+    completion, when the row is gone, or when the client leaves.
+    """
+    deadline = time.monotonic() + _title_wait_left(completed_at)
+    while (left := deadline - time.monotonic()) > 0:
+        try:
+            # Waits like asyncio.sleep, but also notices a client that left. The
+            # status loop notices that through a failing send; this loop sends
+            # nothing until the title is there.
+            message = await asyncio.wait_for(websocket.receive(), timeout=min(WS_POLL_SECONDS, left))
+            if message["type"] == "websocket.disconnect":
+                return
+        except asyncio.TimeoutError:
+            pass
+
+        async with get_db() as db:
+            cursor = await db.execute("SELECT title FROM transcriptions WHERE id = ?", (transcription_id,))
+            row = await cursor.fetchone()
+        if not row:
+            return
+        if row["title"] is not None:
+            if row["title"]:
+                await websocket.send_json({"type": "title", "title": row["title"]})
+                inc(websocket_messages_sent_total, "title")
+            return
 
 
 @router.websocket("/api/ws/status/{transcription_id}")
@@ -510,21 +650,26 @@ async def websocket_status(websocket: WebSocket, transcription_id: str):
             await websocket.close(code=4001, reason="Missing authentication")
             return
 
-        # Verify user owns this transcription
+        # Verify user owns this transcription. The close goes out after the
+        # connection is released: a client may stop its event loop on the close
+        # frame while aiosqlite's worker thread is still closing (#291).
         async with get_db() as db:
             cursor = await db.execute(
                 "SELECT id FROM transcriptions WHERE id = ? AND user_id = ?",
                 (transcription_id, user_id),
             )
-            if not await cursor.fetchone():
-                close_reason = "not_found"
-                await websocket.close(code=4003, reason="Not found")
-                return
+            owned = await cursor.fetchone() is not None
+        if not owned:
+            close_reason = "not_found"
+            await websocket.close(code=4003, reason="Not found")
+            return
 
         while True:
             async with get_db() as db:
                 cursor = await db.execute(
-                    "SELECT status, error_message FROM transcriptions WHERE id = ?",
+                    "SELECT status, error_message, error_code, title, completed_at, "
+                    "result_json IS NOT NULL AND result_json != '[]' AS has_utterances "
+                    "FROM transcriptions WHERE id = ?",
                     (transcription_id,),
                 )
                 row = await cursor.fetchone()
@@ -539,14 +684,25 @@ async def websocket_status(websocket: WebSocket, transcription_id: str):
             msg = {"type": "status", "status": status}
             if status == "failed" and row["error_message"]:
                 msg["error"] = row["error_message"]
+            if status == "failed" and row["error_code"]:
+                msg["error_code"] = row["error_code"]
+            if status == "completed" and row["title"]:
+                msg["title"] = row["title"]
             await websocket.send_json(msg)
             inc(websocket_messages_sent_total, "status")
 
             if status in ("completed", "failed"):
                 close_reason = status
+                # _run_transcription asks the LLM for a title only after setting
+                # completed, and only with a provider (get_llm_provider() returns
+                # one exactly when LLM_PROVIDER is set) and utterances. Under the
+                # same condition, wait for it while the attempt runs (title NULL).
+                if (status == "completed" and row["title"] is None
+                        and settings.LLM_PROVIDER and row["has_utterances"]):
+                    await _send_title_when_ready(websocket, transcription_id, row["completed_at"])
                 break
 
-            await asyncio.sleep(5)
+            await asyncio.sleep(WS_POLL_SECONDS)
     except WebSocketDisconnect:
         close_reason = "client_disconnect"
     except Exception:

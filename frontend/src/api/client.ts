@@ -1,6 +1,7 @@
 import type {
-  FileInfo, TranscriptionSettings, TranscriptionStatus,
+  FileInfo, TranscriptionSettings, TranscriptionStatus, PromptBudget,
   TranscriptionResult, TranscriptionListItem, ConfigResponse,
+  OriginalTranscription, SaveTranscriptionResponse,
   RefinementResult,
   AnalysisTemplate, AnalysisGenerateRequest, AnalysisListItem,
   TranscriptionPreset, TranscriptionPresetCreate,
@@ -10,7 +11,9 @@ import type {
   ApiToken, ApiTokenCreated,
   Invitation, InvitationCreated, InvitationAcceptResponse,
   TranslationResult, UtteranceSource,
+  AssistantChatRequest,
 } from './types'
+import { SseParser } from './sse'
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
 
@@ -31,17 +34,13 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
+/** Fetch with the app base path; a thrown fetch or a redirect sends the browser through the auth flow. */
+async function fetchApi(url: string, options: RequestInit): Promise<Response> {
   let response: Response
   try {
-    response = await fetch(`${BASE}${url}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-    })
+    response = await fetch(`${BASE}${url}`, options)
   } catch (err) {
+    if (options.signal?.aborted) throw err
     // Fetch threw — most likely a cross-origin redirect to the auth provider
     // was blocked by CORS. Force a top-level navigation so the browser can
     // complete the auth flow without CORS restrictions.
@@ -60,7 +59,70 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     const error = await response.json().catch(() => ({ detail: response.statusText }))
     throw new ApiError(response.status, error.detail || response.statusText, error.code)
   }
+  return response
+}
+
+async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  const response = await fetchApi(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  })
   return response.json()
+}
+
+/** The stream of a support-assistant answer ended with an error frame, or without a `done` frame. */
+export class AssistantStreamError extends Error {
+  readonly code: string
+
+  constructor(code: string) {
+    super(code)
+    this.name = 'AssistantStreamError'
+    this.code = code
+  }
+}
+
+/** Streams the assistant's answer; `onDelta` gets each text chunk. Resolves on the `done` frame. */
+export async function streamAssistantChat(
+  body: AssistantChatRequest,
+  opts: { onDelta: (text: string) => void; signal?: AbortSignal },
+): Promise<void> {
+  const response = await fetchApi('/api/assistant/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: opts.signal,
+  })
+  if (!response.body) throw new AssistantStreamError('incomplete')
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  const parser = new SseParser()
+  const handle = (events: { event: string; data: string }[]): boolean => {
+    for (const ev of events) {
+      if (ev.event === 'message') {
+        const delta = JSON.parse(ev.data).delta
+        if (typeof delta === 'string') opts.onDelta(delta)
+      } else if (ev.event === 'done') {
+        return true
+      } else if (ev.event === 'error') {
+        throw new AssistantStreamError(JSON.parse(ev.data).code ?? 'llm_error')
+      }
+    }
+    return false
+  }
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (handle(parser.push(decoder.decode(value, { stream: true })))) return
+    }
+    if (handle(parser.push(decoder.decode()))) return
+  } finally {
+    reader.cancel().catch(() => {})
+  }
+  throw new AssistantStreamError('incomplete')
 }
 
 export const api = {
@@ -94,8 +156,21 @@ export const api = {
       body: JSON.stringify(settings),
     }),
 
+  // Counted in the background while people type, so a failure must not navigate away as request()
+  // does: that would drop an uploaded file. Submitting the settings checks the budget again.
+  promptBudget: async (fields: { initial_prompt: string | null; hotwords: string | null }): Promise<PromptBudget> => {
+    const response = await fetch(`${BASE}/api/prompt-budget`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields),
+    })
+    if (!response.ok || response.redirected) throw new ApiError(response.status, response.statusText)
+    return response.json()
+  },
+
   getStatus: (id: string) => request<TranscriptionStatus>(`/api/status/${id}`),
   getTranscription: (id: string) => request<TranscriptionResult>(`/api/transcription/${id}`),
+  getOriginalTranscription: (id: string) => request<OriginalTranscription>(`/api/transcription/${id}/original`),
 
   exportTranscription: async (id: string, format: string): Promise<string> => {
     const response = await fetch(`${BASE}/api/transcription/${id}/export/${format}`)
@@ -104,7 +179,7 @@ export const api = {
   },
 
   saveTranscription: (id: string, utterances: import('./types').Utterance[]) =>
-    request<{ status: string }>(`/api/transcription/${id}`, {
+    request<SaveTranscriptionResponse>(`/api/transcription/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ utterances }),
     }),
@@ -170,10 +245,14 @@ export const api = {
   deleteAnalysisItem: (transcriptionId: string, analysisId: string, field: string, index: number) =>
     request<unknown>(`/api/analysis/${transcriptionId}/${analysisId}/items/${field}/${index}`, { method: 'DELETE' }),
 
-  translateTranscription: (id: string, targetLanguage: string, source?: UtteranceSource) =>
+  translateTranscription: (id: string, targetLanguage: string, source?: UtteranceSource, force?: boolean) =>
     request<TranslationResult>(`/api/translate/${id}`, {
       method: 'POST',
-      body: JSON.stringify({ target_language: targetLanguage, ...(source ? { source } : {}) }),
+      body: JSON.stringify({
+        target_language: targetLanguage,
+        ...(source ? { source } : {}),
+        ...(force ? { force } : {}),
+      }),
     }),
 
   getTranslation: (id: string) =>
@@ -242,7 +321,8 @@ export const api = {
   revokeApiToken: async (id: string): Promise<void> => {
     const response = await fetch(`${BASE}/api/tokens/${id}`, { method: 'DELETE' })
     if (!response.ok) {
-      throw new Error(response.statusText)
+      const error = await response.json().catch(() => ({ detail: response.statusText }))
+      throw new ApiError(response.status, error.detail || response.statusText, error.code)
     }
   },
 

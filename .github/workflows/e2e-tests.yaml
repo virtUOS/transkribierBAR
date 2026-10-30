@@ -1,0 +1,72 @@
+name: End-to-end tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: backend/.python-version
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install ffmpeg and PulseAudio
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg pulseaudio
+
+      # The runner has no audio output. Without one, Firefox never runs an
+      # AudioContext, and the recorder mixes the second input of Firefox's
+      # dual-device mode in one: that recording would hold only silence, which
+      # the recorder spec checks. A null sink stands in for a desktop's speakers.
+      # (The start beep no longer needs it: it stopped blocking recording in #260.)
+      - name: Start an audio server with a null sink
+        run: |
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=e2e
+          pactl set-default-sink e2e
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install --require-hashes -r requirements-dev.txt
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Chromium and Firefox for Playwright
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium firefox
+
+      - name: Run end-to-end tests
+        working-directory: frontend
+        run: npm run test:e2e
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 7

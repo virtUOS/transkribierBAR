@@ -30,7 +30,7 @@ In the **Subtitles** tab, click **Refine with LLM** above the table. The button 
 2. **Context (optional)**: hints that help the language model with technical terms and proper names, for example "Computer science lecture, speaker is Prof. Müller".
 3. **Refine** starts the refinement. **Cancel** closes the dialog.
 
-The language model receives the original with the names you gave under **Speaker Names**. Assign the names before you refine. Later renames do not reach the **Refined** view.
+The language model receives the original with the stored labels, such as `SPEAKER_00`, not with the names from **Speaker Names**. The names are filled in when the **Refined** view is shown, so you can give or change them before or after refining. If names matter for the correction, write them under **Context (optional)**.
 
 While refinement runs, the button reads **Refining transcription...** and the context field and the buttons are locked. With more than 50 utterances, a note says the refinement may take several minutes. The page waits for the language model. Stay on it until the dialog closes. If you leave the page anyway, the refinement keeps running on the server. You see it when you reopen the transcription later. A new attempt before it has finished fails. Afterwards the editor shows the **Refined** view.
 
@@ -44,7 +44,7 @@ In the **Refined** view, a bar above the table summarizes the changes, and chang
 
 1. **Refined** switches to the refined view, **Original** back to the original.
 2. The **Changes Summary**, with the number of changed utterances. Click it to expand or collapse. Expanded, it describes in words what the language model changed and names the **Context**, if you gave one.
-3. A changed row: it has an amber stripe on the left edge and, on larger screens, a dot next to the row number. Clicking the dot shows **Original** and **Refined** side by side (larger screens only), as below the first row here.
+3. A changed row: it has an amber stripe on the left edge, on larger screens a dot next to the row number, and a **Compare** button next to the text. **Compare** shows **Original** and **Refined** side by side below the row, as below the changed row here. Click it again to close the comparison.
 
 The view is read-only. If you want to change text yourself, do so in the original.
 
