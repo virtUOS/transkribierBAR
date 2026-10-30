@@ -7,7 +7,7 @@ Nach der Anmeldung sehen Sie die Übersicht. Unter **Meine Transkriptionen** ste
 ![Die Übersicht mit zwei Transkriptionen; nummerierte Markierungen heben die Teile einer Zeile hervor](shots/archive.png)
 
 1. Der Titel und darunter der Dateiname, oder nur der Dateiname, wenn es keinen Titel gibt. Die Stiftsymbole daneben benennen sie um (siehe „Umbenennen“).
-2. Das Modell, der Status, das Erstellungsdatum und, wenn die Transkription archiviert ist, ein Schild-Symbol. Der Status ist grün `completed` (fertig), gelb `pending` oder `processing` (wartet oder läuft) oder rot `failed` (fehlgeschlagen).
+2. Das Modell, der Status, das Erstellungsdatum und, wenn die Transkription archiviert ist, ein Schild-Symbol. Der Status ist grün „Abgeschlossen“, gelb „Wartend“ oder „In Bearbeitung“ (wartet oder läuft) oder rot „Fehlgeschlagen“.
 
 Ein Klick auf eine Zeile öffnet die Transkription. Den Titel erzeugt transkribierBAR nach der Transkription automatisch mit dem Sprachmodell. Gelingt das nicht, zeigt die Zeile nur den Dateinamen.
 

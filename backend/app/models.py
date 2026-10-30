@@ -27,11 +27,36 @@ class FileInfo(BaseModel):
 class TranscriptionSettings(BaseModel):
     file_id: str
     language: str | None = None
-    model: str = "base"
+    model: str | None = None
     min_speakers: int = 0
     max_speakers: int = 0
     initial_prompt: str | None = None
     hotwords: str | None = None
+
+    # The ASR backends take "auto" as Auto-detect; stored, it is NULL like a
+    # missing language, so `transcriptions.language` has one value for it.
+    @field_validator("language")
+    @classmethod
+    def _auto_is_no_language(cls, v: str | None) -> str | None:
+        return None if v == "auto" else v
+
+    @model_validator(mode="after")
+    def _check_speaker_bounds(self) -> "TranscriptionSettings":
+        if self.min_speakers < 0 or self.max_speakers < 0:
+            raise ValueError("min_speakers and max_speakers must be 0 or greater")
+        if self.min_speakers > 0 and self.max_speakers > 0 and self.max_speakers < self.min_speakers:
+            raise ValueError("max_speakers must not be lower than min_speakers")
+        return self
+
+
+class PromptBudgetRequest(BaseModel):
+    initial_prompt: str | None = None
+    hotwords: str | None = None
+
+
+class PromptBudget(BaseModel):
+    tokens: int
+    limit: int
 
 
 class TranscriptionStatus(BaseModel):
@@ -39,6 +64,9 @@ class TranscriptionStatus(BaseModel):
     status: str
     progress: float | None = None
     error: str | None = None
+    # Stable reason for a failure, next to the English `error` that API clients may
+    # rely on: server_restarted, timeout, asr_unreachable, asr_failed or unknown.
+    error_code: str | None = None
 
 
 class Utterance(BaseModel):
@@ -222,6 +250,9 @@ class AnalysisRequest(BaseModel):
 class TranslationRequest(BaseModel):
     target_language: str
     source: Literal["original", "refined"] | None = None
+    # Translate again even when a translation for this language and source is
+    # stored, so an out-of-date one can be replaced.
+    force: bool = False
 
 
 class TranslationResult(BaseModel):
@@ -249,6 +280,7 @@ class ConfigResponse(BaseModel):
     default_expiry_hours: int = 72
     archive_expiry_hours: int = 4320
     privacy_notice: bool = False
+    support_assistant_enabled: bool = False
 
 
 # --- Invitations ---
@@ -284,7 +316,7 @@ class InvitationAcceptResponse(BaseModel):
 class TranscriptionPresetCreate(BaseModel):
     name: str
     language: str | None = None
-    model: str = "base"
+    model: str | None = None
     min_speakers: int = 0
     max_speakers: int = 0
     initial_prompt: str | None = None
@@ -293,6 +325,7 @@ class TranscriptionPresetCreate(BaseModel):
 
 class TranscriptionPresetResponse(TranscriptionPresetCreate):
     id: str
+    model: str
     created_at: str | None = None
     updated_at: str | None = None
 
@@ -378,3 +411,4 @@ class TokenListItem(BaseModel):
     expires_at: str | None = None
     last_used_at: str | None = None
     revoked_at: str | None = None
+    expiry_warning: Literal["soon", "expired"] | None = None

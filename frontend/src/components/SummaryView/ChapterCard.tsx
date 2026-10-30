@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useStore } from '../../store'
 import { formatTime } from '../../utils/format'
 import type { SummaryChapter } from '../../api/types'
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function ChapterCard({ chapter, index, onDelete }: Props) {
+  const { t } = useTranslation()
   const setSeekTo = useStore((s) => s.setSeekTo)
   const hasTimestamp = chapter.start_time !== 0 || chapter.end_time !== 0
 
@@ -33,8 +35,9 @@ export function ChapterCard({ chapter, index, onDelete }: Props) {
           {onDelete && (
             <button
               onClick={onDelete}
-              className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-              title="Remove chapter"
+              className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+              title={t('analysis.removeChapter')}
+              aria-label={t('analysis.removeChapter')}
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

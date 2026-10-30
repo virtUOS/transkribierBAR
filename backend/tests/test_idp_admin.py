@@ -128,3 +128,148 @@ async def test_acquire_admin_token_wraps_malformed_json():
     )
     with pytest.raises(KeycloakAdminError):
         await client._get_admin_token()
+
+
+TOKEN_URL = "https://kc.example.com/realms/master/protocol/openid-connect/token"
+USERS_URL = "https://kc.example.com/admin/realms/app/users"
+EMAIL_URL = "https://kc.example.com/admin/realms/app/users/abc-uuid/execute-actions-email"
+
+
+def _client():
+    return KeycloakAdminClient(
+        base_url="https://kc.example.com/", admin_realm="master", target_realm="app",
+        client_id="admin-cli", client_secret="s3cret",
+    )
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_admin_token_is_cached_until_near_expiry():
+    route = respx.post(TOKEN_URL).mock(return_value=Response(200, json={"access_token": "tok-1", "expires_in": 300}))
+    client = _client()
+    assert await client._get_admin_token() == "tok-1"
+    assert await client._get_admin_token() == "tok-1"
+    assert route.call_count == 1
+    req = route.calls.last.request
+    assert b"grant_type=client_credentials" in req.content
+    assert b"client_secret=s3cret" in req.content
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_admin_token_refetched_when_about_to_expire():
+    route = respx.post(TOKEN_URL).mock(side_effect=[
+        Response(200, json={"access_token": "tok-1", "expires_in": 5}),  # inside the 10s safety margin
+        Response(200, json={"access_token": "tok-2", "expires_in": 300}),
+    ])
+    client = _client()
+    assert await client._get_admin_token() == "tok-1"
+    assert await client._get_admin_token() == "tok-2"
+    assert route.call_count == 2
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_admin_token_non_200_raises():
+    respx.post(TOKEN_URL).mock(return_value=Response(401, text="bad creds"))
+    with pytest.raises(KeycloakAdminError, match="401"):
+        await _client()._get_admin_token()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_admin_token_missing_field_raises():
+    respx.post(TOKEN_URL).mock(return_value=Response(200, json={"token_type": "bearer"}))
+    with pytest.raises(KeycloakAdminError, match="KeyError"):
+        await _client()._get_admin_token()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_user_sends_unverified_user_with_bearer_token():
+    respx.post(TOKEN_URL).mock(return_value=Response(200, json={"access_token": "tok-1", "expires_in": 60}))
+    route = respx.post(USERS_URL).mock(return_value=Response(201, headers={"Location": f"{USERS_URL}/new-id/"}))
+    assert await _client().create_user(email="x@example.com") == "new-id"
+    req = route.calls.last.request
+    assert req.headers["Authorization"] == "Bearer tok-1"
+    import json as _json
+    assert _json.loads(req.content) == {
+        "email": "x@example.com", "username": "x@example.com", "enabled": True, "emailVerified": False,
+    }
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_user_unexpected_status_raises():
+    respx.post(TOKEN_URL).mock(return_value=Response(200, json={"access_token": "t", "expires_in": 60}))
+    respx.post(USERS_URL).mock(return_value=Response(500, text="oops"))
+    with pytest.raises(KeycloakAdminError, match="500"):
+        await _client().create_user(email="x@example.com")
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_user_without_location_raises():
+    respx.post(TOKEN_URL).mock(return_value=Response(200, json={"access_token": "t", "expires_in": 60}))
+    respx.post(USERS_URL).mock(return_value=Response(201))
+    with pytest.raises(KeycloakAdminError, match="no Location"):
+        await _client().create_user(email="x@example.com")
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_user_wraps_transport_error():
+    import httpx
+    respx.post(TOKEN_URL).mock(return_value=Response(200, json={"access_token": "t", "expires_in": 60}))
+    respx.post(USERS_URL).mock(side_effect=httpx.ReadTimeout("slow"))
+    with pytest.raises(KeycloakAdminError, match="ReadTimeout"):
+        await _client().create_user(email="x@example.com")
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_user_propagates_token_failure():
+    respx.post(TOKEN_URL).mock(return_value=Response(503))
+    users = respx.post(USERS_URL)
+    with pytest.raises(KeycloakAdminError, match="Token acquire failed"):
+        await _client().create_user(email="x@example.com")
+    assert not users.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_send_setup_email_passes_redirect_and_client():
+    respx.post(TOKEN_URL).mock(return_value=Response(200, json={"access_token": "t", "expires_in": 60}))
+    route = respx.put(EMAIL_URL).mock(return_value=Response(200))
+    await _client().send_setup_email(user_id="abc-uuid", actions=["VERIFY_EMAIL"], redirect_uri="https://app/")
+    params = route.calls.last.request.url.params
+    assert params["redirect_uri"] == "https://app/"
+    assert params["client_id"] == "account"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_send_setup_email_failure_status_raises():
+    respx.post(TOKEN_URL).mock(return_value=Response(200, json={"access_token": "t", "expires_in": 60}))
+    respx.put(EMAIL_URL).mock(return_value=Response(400, text="smtp not configured"))
+    with pytest.raises(KeycloakAdminError, match="400"):
+        await _client().send_setup_email(user_id="abc-uuid", actions=[], redirect_uri="https://app/")
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_send_setup_email_wraps_transport_error():
+    import httpx
+    respx.post(TOKEN_URL).mock(return_value=Response(200, json={"access_token": "t", "expires_in": 60}))
+    respx.put(EMAIL_URL).mock(side_effect=httpx.ConnectError("refused"))
+    with pytest.raises(KeycloakAdminError, match="ConnectError"):
+        await _client().send_setup_email(user_id="abc-uuid", actions=[], redirect_uri="https://app/")
+
+
+def test_build_default_client_depends_on_admin_url(monkeypatch):
+    from app.config import settings
+    from app.services.idp_admin import build_default_client
+    monkeypatch.setattr(settings, "KEYCLOAK_ADMIN_URL", "")
+    assert build_default_client() is None
+    monkeypatch.setattr(settings, "KEYCLOAK_ADMIN_URL", "https://kc.example.com")
+    assert isinstance(build_default_client(), KeycloakAdminClient)

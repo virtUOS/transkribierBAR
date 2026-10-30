@@ -4,17 +4,18 @@
 # requirements-dev.in, never here.
 #
 # After editing, regenerate both lock files from the backend/ directory:
-#   uv pip compile requirements.in --universal --python-version 3.12 --generate-hashes -o requirements.txt
-#   uv pip compile requirements-dev.in --universal --python-version 3.12 --generate-hashes -o requirements-dev.txt
+#   uv pip compile requirements.in --universal --python-version "$(cat .python-version)" --generate-hashes -o requirements.txt
+#   uv pip compile requirements-dev.in --universal --python-version "$(cat .python-version)" --generate-hashes -o requirements-dev.txt
 # Existing pins are kept unless a change needs a new one. To move pins to the
 # newest allowed versions, add --upgrade (all packages) or
 # --upgrade-package NAME (one package) to the first command, then run the
 # second command too.
-fastapi>=0.115.0
-uvicorn[standard]>=0.32.0
+fastapi>=0.162.0
+uvicorn[standard]>=0.54.0
 aiosqlite>=0.20.0
 httpx>=0.27.0
 python-dotenv>=1.0.0
 python-multipart>=0.0.12
 prometheus_client>=0.21.0
-openai>=1.50.0
+openai>=3.39.0
+tiktoken>=0.14.0

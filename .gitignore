@@ -15,3 +15,5 @@ examples/
 .playwright-mcp/
 .worktrees/
 *.db
+.coverage
+htmlcov/

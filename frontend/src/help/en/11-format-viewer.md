@@ -25,7 +25,7 @@ The file gets the recording's name without its extension plus the file extension
 
 ## What the format contains
 
-The format shows the state you see in the editor, including unsaved changes. Names from **Speaker Names** are filled in in all four formats; in the **Refined** view and in a translation made from it, the names from the time of the refinement apply.
+The format shows the state you see in the editor, including unsaved changes. Names from **Speaker Names** are filled in in all four formats and in every view.
 
 Which version appears depends on the view you last chose in the **Subtitles** tab: **Original**, **Refined** or **Translated**. If **Refined** is chosen, the JSON format contains both versions in one object: `utterances` for the original and `refined_utterances` for the refined version.
 

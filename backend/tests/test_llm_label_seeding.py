@@ -23,3 +23,27 @@ def test_llm_duration_histogram_is_seeded(monkeypatch, operation):
     key = tuple(labels[name] for name in metrics.llm_duration_seconds._labelnames)
     assert key in registry, f"duration histogram not seeded for {labels}"
     assert registry[key]._sum.get() == 0
+
+
+@pytest.mark.parametrize("flag,provider", [(True, "seed-support-on"), (False, "seed-support-off")])
+def test_support_operation_seeded_only_when_assistant_enabled(monkeypatch, flag, provider):
+    monkeypatch.setattr(metrics.settings, "ENABLE_SUPPORT_ASSISTANT", flag)
+    monkeypatch.setattr(metrics.settings, "LLM_PROVIDER", provider)
+    monkeypatch.setattr(metrics.settings, "LLM_MODEL", "m")
+
+    metrics.init_label_series()
+
+    assert ((provider, "m", "support") in metrics.llm_requests_total._metrics) is flag
+
+
+@pytest.mark.parametrize("flag", [True, False])
+def test_support_assistant_results_seeded_only_when_enabled(monkeypatch, flag):
+    monkeypatch.setattr(metrics.settings, "ENABLE_SUPPORT_ASSISTANT", flag)
+    monkeypatch.setattr(metrics.settings, "LLM_PROVIDER", "")
+    metrics.support_assistant_requests_total._metrics.clear()
+
+    metrics.init_label_series()
+
+    seeded = set(metrics.support_assistant_requests_total._metrics)
+    expected = {("ok",), ("busy",), ("llm_error",), ("output_limit",), ("aborted",)}
+    assert seeded == (expected if flag else set())

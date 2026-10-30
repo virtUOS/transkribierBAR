@@ -108,6 +108,7 @@ class Settings:
     ENABLE_METRICS: bool = os.getenv("ENABLE_METRICS", "true").lower() in ("true", "1", "yes")
     DEV_MODE: bool = os.getenv("DEV_MODE", "false").lower() in ("true", "1", "yes")
     ENABLE_API_TOKENS: bool = os.getenv("ENABLE_API_TOKENS", "false").lower() in ("true", "1", "yes")
+    ENABLE_SUPPORT_ASSISTANT: bool = os.getenv("ENABLE_SUPPORT_ASSISTANT", "false").lower() in ("true", "1", "yes")
     API_TOKEN_MAX_PER_USER: int = int(os.getenv("API_TOKEN_MAX_PER_USER", "10"))
     API_TOKEN_DEFAULT_EXPIRY_DAYS: int = int(os.getenv("API_TOKEN_DEFAULT_EXPIRY_DAYS", "90"))
 

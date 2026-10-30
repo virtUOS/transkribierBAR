@@ -1,10 +1,15 @@
+import asyncio
 import os
 import pathlib
+import shlex
 import shutil
 import subprocess
 import tempfile
 import pytest
-from app.services.audio import convert_to_mp3, ensure_clean_asr_copy
+from app.services import audio as audio_module
+from app.services.audio import (
+    convert_to_mp3, ensure_clean_asr_copy, get_media_duration, has_video_stream,
+)
 
 
 def _ffmpeg(*args):
@@ -206,3 +211,87 @@ async def test_new_asr_copy_has_no_chapters(tmp_path):
     os.utime(out, (1_000_000_000, 1_000_000_000))
     assert await ensure_clean_asr_copy(str(src), out) == out
     assert os.stat(out).st_mtime == 1_000_000_000
+
+
+# --- probing helpers and failure paths --------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ensure_clean_copy_raises_when_ffprobe_cannot_read(tmp_path):
+    if shutil.which(audio_module.settings.FFPROBE_PATH) is None:
+        pytest.skip("ffprobe not installed")
+    bogus = tmp_path / "in.mp3"
+    bogus.write_bytes(b"definitely not audio")
+    with pytest.raises(RuntimeError, match="ffprobe failed"):
+        await ensure_clean_asr_copy(str(tmp_path / "in.mp4"), str(bogus))
+
+
+@pytest.mark.asyncio
+async def test_ensure_clean_copy_keeps_original_when_stripping_fails(tmp_path, monkeypatch):
+    work = tmp_path / "work"
+    work.mkdir()
+    asr = work / "in.mp3"
+    _ffmpeg("-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+            "-id3v2_version", "3", "-metadata", "title=SECRET-TITLE", str(asr))
+    before = asr.read_bytes()
+
+    async def _fail(_in, _out, _codec):
+        return "ffmpeg said no"
+
+    monkeypatch.setattr(audio_module, "_write_without_metadata", _fail)
+    with pytest.raises(RuntimeError, match="Metadata removal failed: ffmpeg said no"):
+        await ensure_clean_asr_copy(str(tmp_path / "in.mp4"), str(asr))
+    assert asr.read_bytes() == before
+    assert os.listdir(work) == ["in.mp3"]  # temp file cleaned up
+
+
+@pytest.mark.asyncio
+async def test_media_duration_and_video_detection(tmp_path):
+    audio = tmp_path / "a.mp3"
+    _ffmpeg("-f", "lavfi", "-i", "sine=frequency=440:duration=2", str(audio))
+    video = tmp_path / "v.mp4"
+    _ffmpeg("-f", "lavfi", "-i", "color=c=red:s=16x16:d=1", "-f", "lavfi", "-i", "sine=duration=1",
+            "-shortest", str(video))
+
+    assert 1.9 < await get_media_duration(str(audio)) < 2.2
+    assert await has_video_stream(str(audio)) is False
+    assert await has_video_stream(str(video)) is True
+
+
+@pytest.mark.asyncio
+async def test_probes_fail_soft(tmp_path, monkeypatch):
+    garbage = tmp_path / "g.mp3"
+    garbage.write_bytes(b"junk")
+    assert await get_media_duration(str(garbage)) is None
+    assert await has_video_stream(str(garbage)) is False
+
+    monkeypatch.setattr(audio_module.settings, "FFPROBE_PATH", str(tmp_path / "no-such-ffprobe"))
+    assert await get_media_duration(str(garbage)) is None
+    assert await has_video_stream(str(garbage)) is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("probe", [get_media_duration, has_video_stream])
+async def test_cancelled_probe_kills_ffprobe(tmp_path, monkeypatch, probe):
+    pidfile = tmp_path / "pid"
+    fake = tmp_path / "fake-ffprobe"
+    fake.write_text(f"#!/bin/sh\necho $$ > {shlex.quote(str(pidfile))}\nexec sleep 30\n")
+    fake.chmod(0o755)
+    monkeypatch.setattr(audio_module.settings, "FFPROBE_PATH", str(fake))
+
+    task = asyncio.create_task(probe(str(tmp_path / "x.mp3")))
+    try:
+        for _ in range(500):
+            if pidfile.exists() and pidfile.read_text().strip():
+                break
+            await asyncio.sleep(0.01)
+        else:
+            pytest.fail("fake ffprobe never started")
+        pid = int(pidfile.read_text())
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    finally:
+        task.cancel()  # no-op once the task is done; stops the probe on failure
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)

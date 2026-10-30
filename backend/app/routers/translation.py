@@ -3,7 +3,11 @@ import logging
 import traceback
 from fastapi import APIRouter, Depends, HTTPException
 from app.dependencies import get_current_user
-from app.router_helpers import ensure_transcription_owned, reset_translation_state
+from app.router_helpers import (
+    ensure_transcription_owned,
+    reset_translation_state,
+    restore_translation_state,
+)
 from app.models import UserInfo, TranslationRequest
 from app.database import get_db
 from app.services.llm import get_llm_provider
@@ -31,6 +35,14 @@ async def _call_llm_translation(provider, utterances: list[dict], target_languag
         all_translated.extend(data.get("utterances", []))
 
     return all_translated
+
+
+async def _undo_translation_attempt(transcription_id: str, user_id: str, previous) -> None:
+    """Give back the translation the user had before a failed attempt, if any."""
+    if previous:
+        await restore_translation_state(transcription_id, user_id, previous)
+    else:
+        await reset_translation_state(transcription_id, user_id)
 
 
 @router.post("/api/translate/{transcription_id}")
@@ -67,7 +79,11 @@ async def translate_transcription(
 
         same_language = translation_lang == body.target_language
         same_source_request = body.source is None or body.source == (cached_source or "original")
-        if translated_json and translated_json != "" and same_language and same_source_request:
+        if (
+            not body.force
+            and translated_json and translated_json != ""
+            and same_language and same_source_request
+        ):
             current_source_json = refined_json if cached_source == "refined" else result_json
             source_available = bool(current_source_json) and current_source_json != ""
             current_hash = (
@@ -116,6 +132,11 @@ async def translate_transcription(
         source_utterances = json.loads(source_json or "[]")
         source_hash = hash_utterance_texts(source_utterances)
 
+        previous = (
+            (translated_json, translation_lang, cached_source, cached_hash)
+            if translated_json else None
+        )
+
         await db.execute(
             "UPDATE transcriptions SET translated_utterances_json = '', translation_language = ? "
             "WHERE id = ? AND user_id = ?",
@@ -134,11 +155,11 @@ async def translate_transcription(
             body.target_language, transcription_id, type(e).__name__, e,
         )
         logging.error("Traceback: %s", traceback.format_exc())
-        await reset_translation_state(transcription_id, user.id)
+        await _undo_translation_attempt(transcription_id, user.id, previous)
         raise HTTPException(status_code=500, detail="Translation failed")
 
     if len(translated) != len(source_utterances):
-        await reset_translation_state(transcription_id, user.id)
+        await _undo_translation_attempt(transcription_id, user.id, previous)
         raise HTTPException(
             status_code=500,
             detail=f"LLM returned {len(translated)} utterances, expected {len(source_utterances)}",

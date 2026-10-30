@@ -7,6 +7,7 @@ from aiosqlite import Connection
 
 from app.config import settings
 from app.models import UserInfo
+from app.services.token_expiry import expiry_warning
 
 
 class TokenLimitError(Exception):
@@ -105,6 +106,7 @@ async def list_tokens(db: Connection, *, user_id: str) -> list[dict]:
         (user_id,),
     )
     rows = await cursor.fetchall()
+    now = datetime.now(timezone.utc)
     return [
         {
             "id": row["id"],
@@ -114,6 +116,12 @@ async def list_tokens(db: Connection, *, user_id: str) -> list[dict]:
             "expires_at": row["expires_at"],
             "last_used_at": row["last_used_at"],
             "revoked_at": row["revoked_at"],
+            "expiry_warning": expiry_warning(
+                created_at=row["created_at"],
+                expires_at=row["expires_at"],
+                revoked_at=row["revoked_at"],
+                now=now,
+            ),
         }
         for row in rows
     ]

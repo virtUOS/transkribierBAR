@@ -18,3 +18,27 @@ export function pipelineTargetToRun(
   const bundleId = targets.get(transcriptionId)
   return bundleId ? { transcriptionId, bundleId } : null
 }
+
+/**
+ * The bundle steps run for one transcription while the user may open another.
+ * Returns a function that runs a store write only while `transcriptionId` is still
+ * the open transcription, so a result never lands under a different one.
+ */
+export function whileTranscriptionOpen(
+  transcriptionId: string,
+  getOpenId: () => string | null,
+): (write: () => void) => boolean {
+  return (write) => {
+    if (getOpenId() !== transcriptionId) return false
+    write()
+    return true
+  }
+}
+
+/**
+ * Status line shared by all bundle runs: a run may clear it only if it is still the
+ * status that run set, never one set by another transcription's run.
+ */
+export function releaseStatus<T>(current: T | null, mine: T | null): T | null {
+  return current === mine ? null : current
+}

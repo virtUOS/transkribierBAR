@@ -27,7 +27,7 @@ export function SubmittedSummaryCard({ summary }: SubmittedSummaryCardProps) {
   if (!summary.detectSpeakers) {
     speakersLabel = t('transcription.summary.speakersOff')
   } else if (summary.minSpeakers === summary.maxSpeakers) {
-    speakersLabel = t('transcription.summary.speakersOne', { count: summary.minSpeakers })
+    speakersLabel = t('transcription.summary.speakers', { count: summary.minSpeakers })
   } else {
     speakersLabel = t('transcription.summary.speakersRange', {
       min: summary.minSpeakers,

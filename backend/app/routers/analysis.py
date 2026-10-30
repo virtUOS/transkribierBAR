@@ -50,14 +50,6 @@ async def generate_analysis(
     from app.services.source_tracking import hash_utterance_texts, select_source
 
     async with get_db() as db:
-        # Rate limit: reject if analysis is already in progress for this transcription
-        cursor = await db.execute(
-            "SELECT id FROM analyses WHERE transcription_id = ? AND analysis_json IS NULL",
-            (transcription_id,),
-        )
-        if await cursor.fetchone():
-            raise HTTPException(status_code=429, detail="Analysis generation already in progress")
-
         # Get transcription
         cursor = await db.execute(
             "SELECT result_json, refined_utterances_json, language FROM transcriptions "
@@ -67,6 +59,14 @@ async def generate_analysis(
         row = await cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Transcription not found")
+
+        # Rate limit: reject if analysis is already in progress for this transcription
+        cursor = await db.execute(
+            "SELECT id FROM analyses WHERE transcription_id = ? AND analysis_json IS NULL",
+            (transcription_id,),
+        )
+        if await cursor.fetchone():
+            raise HTTPException(status_code=429, detail="Analysis generation already in progress")
 
         result_json = row["result_json"]
         refined_json = row["refined_utterances_json"]

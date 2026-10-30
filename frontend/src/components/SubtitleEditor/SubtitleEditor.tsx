@@ -51,6 +51,14 @@ export function SubtitleEditor() {
   const activeRef = useRef<HTMLTableRowElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  // The editor stays mounted when another transcription is opened; its error
+  // belongs to the previous one.
+  const [prevTranscriptionId, setPrevTranscriptionId] = useState(transcriptionId)
+  if (transcriptionId !== prevTranscriptionId) {
+    setPrevTranscriptionId(transcriptionId)
+    setSaveError(null)
+  }
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [searchScope, setSearchScope] = useState<SearchScope>('both')
@@ -59,7 +67,7 @@ export function SubtitleEditor() {
   const [retryingChunks, setRetryingChunks] = useState(false)
   const [retryError, setRetryError] = useState<'stale' | 'generic' | null>(null)
   const [refineError, setRefineError] = useState(false)
-  const [translateError, setTranslateError] = useState(false)
+  const [translateError, setTranslateError] = useState<string | null>(null)
   const [refining, setRefining] = useState(false)
   const [selectedRefinementPresetId, setSelectedRefinementPresetId] = useState<string | null>(null)
   const [speakerPanelOpen, setSpeakerPanelOpen] = useState(false)
@@ -78,25 +86,30 @@ export function SubtitleEditor() {
     setSelectedRefinementPresetId(preset.id)
   }
 
-  // Auto-load refinement preset from active bundle
-  useEffect(() => {
-    if (activeBundleId && showRefineModal && !selectedRefinementPresetId) {
-      const bundle = bundles.find((b) => b.id === activeBundleId)
-      if (bundle?.refinement_preset_id) {
-        handleLoadRefinementPreset(bundle.refinement_preset_id)
-      }
-    }
-  }, [activeBundleId, bundles, showRefineModal]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Opening the dialog with no preset chosen yet loads the active bundle's refinement preset
+  const openRefineDialog = () => {
+    const bundlePresetId = bundles.find((b) => b.id === activeBundleId)?.refinement_preset_id
+    if (bundlePresetId && !selectedRefinementPresetId) handleLoadRefinementPreset(bundlePresetId)
+    setShowRefineModal(true)
+  }
   const [showTranslateModal, setShowTranslateModal] = useState(false)
   const [translateLanguage, setTranslateLanguage] = useState('en')
   const [translateSource, setTranslateSource] = useState<'original' | 'refined'>('refined')
   const [translating, setTranslating] = useState(false)
 
-  useEffect(() => {
-    if (showTranslateModal) {
-      setTranslateSource(refinedUtterances ? 'refined' : 'original')
-    }
-  }, [showTranslateModal, refinedUtterances])
+  // Renewing a stored translation starts from its language; the source starts from the refined text
+  const openTranslateDialog = () => {
+    if (translationLanguage) setTranslateLanguage(translationLanguage)
+    setTranslateSource(refinedUtterances ? 'refined' : 'original')
+    setShowTranslateModal(true)
+  }
+
+  // A refinement that arrives while the dialog is open (a bundle runs one) becomes its source
+  const [translateSourceSetFor, setTranslateSourceSetFor] = useState(refinedUtterances)
+  if (translateSourceSetFor !== refinedUtterances) {
+    setTranslateSourceSetFor(refinedUtterances)
+    if (showTranslateModal) setTranslateSource(refinedUtterances ? 'refined' : 'original')
+  }
   const [summaryCollapsed, setSummaryCollapsed] = useState(false)
   const [editingCell, setEditingCell] = useState<{ index: number; field: string } | null>(null)
   const setSeekTo = useStore((s) => s.setSeekTo)
@@ -383,30 +396,58 @@ export function SubtitleEditor() {
     setDirty(true)
   }, [result, setResult, setDirty])
 
-  const handleRestore = useCallback(async () => {
-    if (!transcriptionId || !confirm(t('editor.confirmRestore'))) return
+  const handleDiscard = useCallback(async () => {
+    if (!transcriptionId || !confirm(t('editor.confirmDiscard'))) return
+    setSaveError(null)
     try {
-      const original = await api.getTranscription(transcriptionId)
-      setResult(original)
+      const saved = await api.getTranscription(transcriptionId)
+      if (useStore.getState().transcriptionId !== transcriptionId) return
+      setResult(saved)
       setDirty(false)
     } catch (e) {
-      console.error('Restore failed:', e)
+      if (useStore.getState().transcriptionId !== transcriptionId) return
+      setSaveError(e instanceof ApiError && e.message ? e.message : t('editor.discardFailed'))
     }
   }, [transcriptionId, setResult, setDirty, t])
+
+  const handleRestoreOriginal = useCallback(async () => {
+    if (!transcriptionId || !confirm(t('editor.confirmRestore'))) return
+    setSaveError(null)
+    try {
+      const original = await api.getOriginalTranscription(transcriptionId)
+      const current = useStore.getState().transcriptionResult
+      if (!current || current.id !== transcriptionId) return
+      setResult({ ...current, utterances: original.utterances })
+      // When the saved version is the original, loading it leaves nothing unsaved
+      setDirty(current.edited === true)
+      setActiveView('original')
+    } catch (e) {
+      if (useStore.getState().transcriptionId !== transcriptionId) return
+      setSaveError(e instanceof ApiError && e.message ? e.message : t('editor.restoreFailed'))
+    }
+  }, [transcriptionId, setResult, setDirty, setActiveView, t])
 
   const handleSave = async () => {
     if (!transcriptionId || !result) return
     setSaving(true)
+    setSaveError(null)
     try {
-      await api.saveTranscription(transcriptionId, result.utterances)
+      const saved = await api.saveTranscription(transcriptionId, result.utterances)
+      const current = useStore.getState().transcriptionResult
+      // Another transcription may have been opened while this one was saving
+      if (current?.id !== transcriptionId) return
+      setResult({ ...current, edited: saved.edited })
       setDirty(false)
       if (refinementMetadata) {
         // Staleness is decided server-side from the saved texts; refresh it so
         // the badge appears without a reload.
-        api.getRefinement(transcriptionId).then((r) => setRefinementStale(r.stale)).catch(() => {})
+        api.getRefinement(transcriptionId).then((r) => {
+          if (useStore.getState().transcriptionId === transcriptionId) setRefinementStale(r.stale)
+        }).catch(() => {})
       }
     } catch (e) {
-      console.error('Save failed:', e)
+      if (useStore.getState().transcriptionId !== transcriptionId) return
+      setSaveError(e instanceof ApiError && e.message ? e.message : t('editor.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -457,15 +498,24 @@ export function SubtitleEditor() {
     }
   }
 
+  // The server hands back a stored translation for the same language and source
+  // unchanged (a request without a source matches any), so replacing an
+  // out-of-date one has to be asked for explicitly.
+  const replacesStaleTranslation = !!translatedUtterances
+    && (translationStale || !translationSourceAvailable)
+    && translateLanguage === translationLanguage
+    && (!refinedUtterances || translateSource === translationSource)
+
   const handleTranslate = async () => {
     if (!transcriptionId) return
     setTranslating(true)
-    setTranslateError(false)
+    setTranslateError(null)
     try {
       const translationResult = await api.translateTranscription(
         transcriptionId,
         translateLanguage,
         refinedUtterances ? translateSource : undefined,
+        replacesStaleTranslation,
       )
       setTranslatedUtterances(translationResult.utterances)
       setTranslationLanguage(translationResult.language)
@@ -476,8 +526,8 @@ export function SubtitleEditor() {
       })
       setActiveView('translated')
       setShowTranslateModal(false)
-    } catch {
-      setTranslateError(true)
+    } catch (e) {
+      setTranslateError(e instanceof ApiError && e.message ? e.message : t('editor.translationFailed'))
     } finally {
       setTranslating(false)
     }
@@ -573,22 +623,35 @@ export function SubtitleEditor() {
           >
             {t('editor.speakerNames')}
           </button>
+          {saveError && (
+            <span role="alert" className="text-xs text-red-400">{saveError}</span>
+          )}
           {dirty && (
-            <>
-              <button
-                onClick={handleRestore}
-                className="px-3 py-1 text-gray-400 text-xs rounded border border-gray-600 hover:text-white hover:border-gray-400"
-              >
-                {t('editor.restoreOriginal')}
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-500 disabled:opacity-50"
-              >
-                {saving ? t('common.loading') : t('editor.saveChanges')}
-              </button>
-            </>
+            <button
+              onClick={handleDiscard}
+              disabled={saving}
+              className="px-3 py-1 text-gray-400 text-xs rounded border border-gray-600 hover:text-white hover:border-gray-400 disabled:opacity-50"
+            >
+              {t('editor.discardChanges')}
+            </button>
+          )}
+          {result?.edited && (
+            <button
+              onClick={handleRestoreOriginal}
+              disabled={saving}
+              className="px-3 py-1 text-gray-400 text-xs rounded border border-gray-600 hover:text-white hover:border-gray-400 disabled:opacity-50"
+            >
+              {t('editor.restoreOriginal')}
+            </button>
+          )}
+          {dirty && (
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-500 disabled:opacity-50"
+            >
+              {saving ? t('common.loading') : t('editor.saveChanges')}
+            </button>
           )}
         </div>
       </div>
@@ -602,7 +665,7 @@ export function SubtitleEditor() {
         {llmAvailable && !refinementMetadata && (
           <button
             data-help="refine-open"
-            onClick={() => setShowRefineModal(true)}
+            onClick={openRefineDialog}
             className="flex items-center gap-1.5 px-3 py-1 text-xs bg-amber-700/40 text-amber-300 border border-amber-700/50 rounded hover:bg-amber-700/60"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -614,7 +677,7 @@ export function SubtitleEditor() {
         {llmAvailable && !translatedUtterances && (
           <button
             data-help="translate-open"
-            onClick={() => setShowTranslateModal(true)}
+            onClick={openTranslateDialog}
             className="flex items-center gap-1.5 px-3 py-1 text-xs bg-indigo-700/40 text-indigo-300 border border-indigo-700/50 rounded hover:bg-indigo-700/60"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -667,7 +730,7 @@ export function SubtitleEditor() {
               )}
               {translatedUtterances && (translationStale || !translationSourceAvailable) && (
                 <button
-                  onClick={() => setShowTranslateModal(true)}
+                  onClick={openTranslateDialog}
                   className="flex items-center gap-1 px-2 py-1 text-xs text-amber-400 border border-amber-700/40 rounded hover:bg-amber-700/10"
                   title={!translationSourceAvailable ? t('editor.sourceMissing') : t('editor.sourceStale')}
                 >
@@ -924,12 +987,15 @@ export function SubtitleEditor() {
                 {t('editor.translationWarningLong', { count: baseUtterances.length })}
               </p>
             )}
+            {replacesStaleTranslation && (
+              <p className="text-xs text-amber-400 mt-2">{t('editor.translationReplacesStale')}</p>
+            )}
             {translateError && (
-              <p role="alert" className="text-xs text-red-400 mt-2">{t('editor.translationFailed')}</p>
+              <p role="alert" className="text-xs text-red-400 mt-2">{translateError}</p>
             )}
             <div className="flex justify-end gap-2 mt-4">
               <button
-                onClick={() => { setShowTranslateModal(false); setTranslateError(false) }}
+                onClick={() => { setShowTranslateModal(false); setTranslateError(null) }}
                 disabled={translating}
                 className="px-3 py-1.5 text-xs text-gray-400 border border-gray-600 rounded hover:border-gray-500 hover:text-gray-200 disabled:opacity-50"
               >
