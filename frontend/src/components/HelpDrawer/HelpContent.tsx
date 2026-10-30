@@ -7,6 +7,7 @@ import type { Components } from 'react-markdown'
 import type { HelpSectionId } from './helpSections'
 import { loadContent, resolveAssetUrl, settingValues, fillSettings, shotFor } from './helpSections'
 import { HelpShot } from './HelpShot'
+import { HelpLink } from './HelpLink'
 import { useStore } from '../../store'
 
 interface HelpContentProps {
@@ -37,30 +38,7 @@ function LightboxImage({ src, alt, lang, ...props }: React.ImgHTMLAttributes<HTM
 }
 
 const components: Components = {
-  a: ({ href, children, ...props }) => {
-    // Guide pages (/handbuch/...) are separate documents: opening them in place would
-    // navigate the SPA away and lose a running upload or recording. mailto: links fire
-    // beforeunload in Chromium, which would show a false "Leave site?" prompt.
-    const opensInNewTab =
-      !!href &&
-      (href.startsWith('http://') ||
-        href.startsWith('mailto:') ||
-        href.startsWith('https://') ||
-        href.startsWith('/handbuch/') ||
-        href.startsWith(`${import.meta.env.BASE_URL}handbuch/`))
-    if (opensInNewTab) {
-      return (
-        <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline" {...props}>
-          {children}
-        </a>
-      )
-    }
-    return (
-      <a href={href} className="text-blue-400 hover:text-blue-300 underline" {...props}>
-        {children}
-      </a>
-    )
-  },
+  a: HelpLink,
   code: ({ children, ...props }) => (
     <code className="bg-gray-800 text-amber-300 px-1 py-0.5 rounded text-sm" {...props}>
       {children}

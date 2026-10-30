@@ -13,16 +13,17 @@ interface PresetSelectProps {
   onSave: (name: string) => void
   placeholder?: string
   hideDropdown?: boolean
+  saveDisabled?: boolean
 }
 
-export function PresetSelect({ presets, selectedId, onSelect, onSave, placeholder, hideDropdown }: PresetSelectProps) {
+export function PresetSelect({ presets, selectedId, onSelect, onSave, placeholder, hideDropdown, saveDisabled = false }: PresetSelectProps) {
   const { t } = useTranslation()
   const [showSave, setShowSave] = useState(false)
   const [saveName, setSaveName] = useState('')
 
   const handleSave = () => {
     const trimmed = saveName.trim()
-    if (!trimmed) return
+    if (!trimmed || saveDisabled) return
     onSave(trimmed)
     setSaveName('')
     setShowSave(false)
@@ -54,7 +55,7 @@ export function PresetSelect({ presets, selectedId, onSelect, onSave, placeholde
             className="bg-gray-700 text-white text-sm rounded px-2 py-1 w-36"
             autoFocus
           />
-          <button onClick={handleSave} className="text-green-400 hover:text-green-300 text-sm px-1">
+          <button onClick={handleSave} disabled={saveDisabled} className="text-green-400 hover:text-green-300 disabled:opacity-50 text-sm px-1">
             ✓
           </button>
           <button onClick={() => setShowSave(false)} className="text-gray-400 hover:text-gray-300 text-sm px-1">
@@ -64,7 +65,8 @@ export function PresetSelect({ presets, selectedId, onSelect, onSave, placeholde
       ) : (
         <button
           onClick={() => setShowSave(true)}
-          className="text-xs text-blue-400 hover:text-blue-300 whitespace-nowrap"
+          disabled={saveDisabled}
+          className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
         >
           {t('presets.saveAs')}
         </button>

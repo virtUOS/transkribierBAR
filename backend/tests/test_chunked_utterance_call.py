@@ -87,3 +87,22 @@ async def test_single_chunk_transcript_still_works():
     )
     assert provider.calls == 1
     assert len(results[0]["utterances"]) == 10
+
+
+class _RenamesSpeakers(_Recorder):
+    async def _json_chat(self, system, user, operation, max_tokens=None):
+        chunk = json.loads(user)
+        return {"utterances": [{**u, "speaker": "Alice"} for u in chunk], "changes_summary": "x"}
+
+
+@pytest.mark.asyncio
+async def test_same_count_call_returns_the_sent_speakers():
+    sent = _utterances(60)          # two chunks, SPEAKER_00 everywhere
+    sent[1]["speaker"] = None
+    del sent[55]["speaker"]
+    results = await chunked_utterance_call(
+        _RenamesSpeakers(), sent, build_system=lambda: "sys",
+        operation="refinement", expect_same_count=True,
+    )
+    got = [u.get("speaker") for data in results for u in data["utterances"]]
+    assert got == [u.get("speaker") for u in sent]

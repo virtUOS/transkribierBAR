@@ -156,12 +156,14 @@ async def seed(
             await db.execute(
                 """INSERT INTO transcriptions (id, user_id, file_id, asr_job_id, asr_backend,
                        status, language, model, min_speakers, max_speakers, result_json,
+                       original_result_json,
                        created_at, completed_at, refined_utterances_json,
                        refinement_metadata_json, translated_utterances_json,
                        translation_language, translation_source, translation_source_hash, title)
-                   VALUES (?, ?, ?, ?, 'demo', 'completed', ?, 'large-v3-turbo', 2, 2, ?, ?, ?,
+                   VALUES (?, ?, ?, ?, 'demo', 'completed', ?, 'large-v3-turbo', 2, 2, ?, ?, ?, ?,
                            ?, ?, ?, ?, 'refined', ?, ?)""",
                 (txn_id, USER_ID, file_id, f"demo-{code}", code,
+                 json.dumps(original, ensure_ascii=False),
                  json.dumps(original, ensure_ascii=False), CREATED[code], COMPLETED[code],
                  json.dumps(refined, ensure_ascii=False),
                  json.dumps(metadata, ensure_ascii=False),

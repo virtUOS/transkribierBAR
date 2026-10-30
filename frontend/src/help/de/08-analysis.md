@@ -63,7 +63,7 @@ Ein Klick auf einen Eintrag klappt ihn auf.
 3. **Ergebnis kopieren** legt den Text in die Zwischenablage. **TXT** und **Markdown** laden ihn herunter, als Datei mit dem Namen der Aufnahme und dem Zusatz `_analysis`. Die Schaltflächen stehen über und unter dem Ergebnis.
 4. Bei Kapiteln, Kernpunkten, Entscheidungen und Aufgaben springt der Player nach einem Klick auf die Zeitangabe an diese Stelle.
 
-Das Kreuz, das beim Darüberfahren an einer Karte erscheint, entfernt diesen Punkt aus dem Ergebnis. Das wird sofort gespeichert und lässt sich nicht rückgängig machen. Bei der Zusammenfassung gilt das für Kapitel, nicht für den Zusammenfassungstext.
+Das Kreuz, das beim Darüberfahren an einer Karte erscheint, entfernt diesen Punkt nach einer Rückfrage aus dem Ergebnis. Nach der Bestätigung wird das sofort gespeichert und lässt sich nicht rückgängig machen. Bei der Zusammenfassung gilt das für Kapitel, nicht für den Zusammenfassungstext.
 
 Unter dem Ergebnis steht noch einmal, womit es erstellt wurde.
 

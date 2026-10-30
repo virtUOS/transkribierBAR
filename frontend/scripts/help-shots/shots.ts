@@ -296,8 +296,8 @@ export const shots: ShotSpec[] = [
       await openDemo(page, lang)
       await page.locator('[data-help="view-refined"]').click()
       await page.locator('[data-help="refined-summary"]').waitFor()
-      // The # cell of the first changed row opens the side-by-side comparison.
-      await page.locator('tr:has([data-help="row-changed-dot"]) [data-help="row-number"]').first().click()
+      // The Compare button of the first changed row opens the side-by-side comparison.
+      await page.locator('tr:has([data-help="row-changed-dot"]) [data-help="row-compare"]').first().click()
       await page.locator('[data-help="row-diff"]').waitFor()
       await rest(page)
     },
@@ -306,7 +306,7 @@ export const shots: ShotSpec[] = [
     marks: [
       '[data-help="editor-views"]',
       '[data-help="refined-summary"]',
-      'tr:has([data-help="row-changed-dot"]) [data-help="row-number"]',
+      'tr:has([data-help="row-changed-dot"]) [data-help="row-compare"]',
     ],
   },
   {

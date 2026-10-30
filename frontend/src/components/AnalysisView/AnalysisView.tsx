@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from '../../store'
-import { api } from '../../api/client'
+import { api, ApiError } from '../../api/client'
 import { ChapterCard } from '../SummaryView/ChapterCard'
 import { ProtocolCard } from '../ProtocolView/ProtocolCard'
 import { formatTime, downloadText, downloadMarkdown } from '../../utils/format'
@@ -148,6 +148,7 @@ function AnalysisCard({ analysisId, transcriptionId, templates, baseName, onDele
   }
 
   const handleDeleteItem = async (field: string, index: number) => {
+    if (!confirm(t('analysis.confirmDeleteItem'))) return
     try {
       const updated = await api.deleteAnalysisItem(transcriptionId, analysisId, field, index)
       setResult(updated)
@@ -355,14 +356,18 @@ export function AnalysisView() {
   const [customPrompt, setCustomPrompt] = useState('')
   const [promptExpanded, setPromptExpanded] = useState(false)
   const [language, setLanguage] = useState<string>(detectedLanguage || 'en')
-  const [analysisSource, setAnalysisSource] = useState<'original' | 'refined'>('refined')
+  const [analysisSource, setAnalysisSource] = useState<'original' | 'refined'>(refinedUtterances ? 'refined' : 'original')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
-  useEffect(() => {
+  // A new refinement (or none) sets the source again, while rendering it
+  const [sourceSetFor, setSourceSetFor] = useState(refinedUtterances)
+  if (sourceSetFor !== refinedUtterances) {
+    setSourceSetFor(refinedUtterances)
     setAnalysisSource(refinedUtterances ? 'refined' : 'original')
-  }, [refinedUtterances])
+  }
 
   // Chapter hints (for summary template)
   const [hintsExpanded, setHintsExpanded] = useState(false)
@@ -431,12 +436,17 @@ export function AnalysisView() {
     setSelectedAnalysisPresetId(preset.id)
   }
 
-  useEffect(() => {
-    if (!activeBundleId) return
-    const bundle = bundles.find((b) => b.id === activeBundleId)
-    if (!bundle?.analysis_preset_id) return
-    handleLoadAnalysisPreset(bundle.analysis_preset_id)
-  }, [activeBundleId, bundles, handleLoadAnalysisPreset])
+  // The active bundle's analysis preset fills the form once per bundle and preset, as soon as the
+  // preset is loaded; a preset chosen or saved by hand afterwards stays selected.
+  const bundlePresetId = bundles.find((b) => b.id === activeBundleId)?.analysis_preset_id ?? null
+  const bundlePresetKey = bundlePresetId && analysisPresets.some((p) => p.id === bundlePresetId)
+    ? `${activeBundleId}:${bundlePresetId}`
+    : null
+  const [appliedBundlePreset, setAppliedBundlePreset] = useState<string | null>(null)
+  if (bundlePresetKey !== appliedBundlePreset) {
+    setAppliedBundlePreset(bundlePresetKey)
+    if (bundlePresetKey) handleLoadAnalysisPreset(bundlePresetId)
+  }
 
   const handleResetPrompt = useCallback(() => {
     if (selectedTemplate) {
@@ -503,11 +513,12 @@ export function AnalysisView() {
 
   const handleDeleteAnalysis = async (analysisId: string) => {
     if (!transcriptionId) return
+    setDeleteError(null)
     try {
       await api.deleteAnalysis(transcriptionId, analysisId)
       removeAnalysis(analysisId)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Delete failed')
+      setDeleteError(e instanceof ApiError ? e.message : t('analysis.deleteFailed'))
     }
   }
 
@@ -533,6 +544,7 @@ export function AnalysisView() {
       {/* Existing analyses */}
       {analyses.length > 0 && (
         <div className="space-y-2">
+          {deleteError && <p role="alert" className="text-red-400 text-sm">{deleteError}</p>}
           {analyses.map((a) => (
             <AnalysisCard
               key={a.id}

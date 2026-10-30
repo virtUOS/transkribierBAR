@@ -20,7 +20,7 @@ If the upload is still running, the button reads **Transcribe when ready**; the 
 
 ## Using bundles
 
-A bundle links presets for transcription, refinement, analysis and translation. If you have created bundles, pick one under **Presets** in the **Bundles** field. If a bundle is marked as the default, it is already preselected when you open the page. That does not copy its transcription preset into the settings, though. This only happens when you choose the bundle yourself in the **Bundles** field, even if it is already shown. To do so, first select **Select a bundle...** and then the bundle.
+A bundle links presets for transcription, refinement, analysis and translation. If you have created bundles, pick one under **Presets** in the **Bundles** field. If a bundle is marked as the default, the app preselects it when it opens and applies its transcription preset to the settings, just as if you had chosen the bundle yourself. If you mark a bundle as the default while the app is open, the **Bundles** field shows it, but its transcription preset is only applied the next time the app opens. To apply it right away, first select **Select a bundle...** and then the bundle.
 
 If the bundle includes refinement, analysis or translation, the button reads **Run pipeline**. Your browser starts those steps automatically after the transcription. Stay on the page until they have finished. You create bundles on the **Presets** page.
 
@@ -31,3 +31,20 @@ While the file is uploading, transkribierBAR asks before you switch to another v
 Once the transcription is running, you can leave the page. It continues on the server and appears in the overview later. This does not apply to the steps of a bundle: they only run while the page stays open. If you open the transcription again in the same tab, the steps start then.
 
 > **Large files.** An uploaded file alone does not appear in the overview. Click **Transcribe when ready** while the upload is still running and keep the tab open until the upload has finished. Once the transcription is running, you can leave the page.
+
+## If the transcription fails
+
+If the transcription fails, **Transcription failed** appears with the reason after **Error message:**, for example:
+
+- **The speech recognition did not finish this transcription within the time limit.**
+- **The request to the speech recognition failed.**
+- **The speech recognition reported an error for this transcription.**
+- **The server restarted while this transcription was running.**
+
+If the language was set to Auto-detect and the speech recognition reported an error, it also says: **The language was set to Auto-detect. Choosing the language may help.**
+
+**Try again** takes you to the settings for the same file. Check them, change for example the language, and click **Transcribe**. You do not have to upload the file again.
+
+The failed transcription stays in the overview with the red status "Failed". If you open it there, its page shows the same notice with the reason and **Try again**. From there, the settings are not taken from the failed attempt; check **Transcription language** and **Quality** (or **Model**) in particular. A new transcription of the same file appears as an entry of its own. It belongs to the same file and therefore has the same period (see "Archive"). You remove the failed one with **Delete transcription** on its page. If another transcription uses the file, the file is kept.
+
+If the transcription fails repeatedly, write to [{{contact_email}}](mailto:{{contact_email}}).

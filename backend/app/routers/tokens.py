@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 
 from app.config import settings
 from app.database import get_db
@@ -38,9 +38,14 @@ async def create_api_token(
                 db, user_id=user.id, name=req.name, expires_in_days=req.expires_in_days,
             )
         except DuplicateTokenNameError as e:
-            raise HTTPException(status_code=409, detail=str(e))
+            # The code is for the frontend, which shows its own localized text.
+            return JSONResponse(
+                status_code=409, content={"detail": str(e), "code": "duplicate_token_name"},
+            )
         except TokenLimitError as e:
-            raise HTTPException(status_code=429, detail=str(e))
+            return JSONResponse(
+                status_code=429, content={"detail": str(e), "code": "token_limit_reached"},
+            )
     inc(api_tokens_created_total)
     return TokenCreateResponse(**created)
 
@@ -60,6 +65,8 @@ async def revoke_api_token(
     async with get_db() as db:
         ok = await revoke_token(db, user_id=user.id, token_id=token_id)
     if not ok:
-        raise HTTPException(status_code=404, detail="Token not found")
+        return JSONResponse(
+            status_code=404, content={"detail": "Token not found", "code": "token_not_found"},
+        )
     inc(api_tokens_revoked_total)
     return Response(status_code=204)

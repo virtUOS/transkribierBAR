@@ -1,4 +1,5 @@
 import json
+from collections.abc import AsyncIterator
 
 import httpx
 
@@ -44,6 +45,46 @@ class OllamaProvider(LLMProvider):
                     f"The language model's {operation} reply was truncated at the output limit."
                 )
             return payload["message"]["content"]
+
+    async def stream_chat(
+        self, messages: list[dict], operation: str, max_tokens: int
+    ) -> AsyncIterator[str]:
+        # Ollama silently truncates the prompt to its default context window, so size
+        # it from the prompt (~3 characters per token, plus the reply and headroom).
+        total_chars = sum(len(m.get("content") or "") for m in messages)
+        needed = total_chars // 3 + max_tokens + 512
+        num_ctx = min(65536, max(8192, -(-needed // 1024) * 1024))
+        payload = {
+            "model": self._model,
+            "messages": messages,
+            "stream": True,
+            "options": {"num_predict": max_tokens, "temperature": 0.2, "num_ctx": num_ctx},
+        }
+        final: dict | None = None
+        async with httpx.AsyncClient(timeout=settings.LLM_TIMEOUT) as client:
+            async with client.stream(
+                "POST", f"{self._base_url}/api/chat", json=payload
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.strip():
+                        continue
+                    data = json.loads(line)
+                    if "error" in data:
+                        raise RuntimeError("Ollama reported an error while streaming the reply.")
+                    content = (data.get("message") or {}).get("content")
+                    if content:
+                        yield content
+                    if data.get("done"):
+                        final = data
+                        break
+        if final is None:
+            raise RuntimeError("The Ollama stream ended before the reply was complete.")
+        track_llm_tokens(settings.LLM_PROVIDER, self._model, operation, final)
+        if final.get("done_reason") == "length":
+            raise OutputLimitExceeded(
+                f"The language model's {operation} reply was truncated at the output limit."
+            )
 
     async def _json_chat(
         self, system: str, user: str, operation: str, max_tokens: int | None = None

@@ -36,7 +36,7 @@ Bei **Hochladen** und **Aufnehmen** erscheint das Feld **Pakete** in der Gruppe 
 
 ## Standard-Paket
 
-Der Stern auf der Karte eines Pakets macht es zum Standard. Der Stern beim Standard-Paket entfernt den Standard wieder. Sie können nur ein Standard-Paket haben. Die Anwendung wählt es beim Öffnen vor. Die Einstellungen seiner Transkriptions-Voreinstellung werden dadurch noch nicht übernommen. Der Abschnitt „Hochladen“ erklärt das.
+Der Stern auf der Karte eines Pakets macht es zum Standard. Der Stern beim Standard-Paket entfernt den Standard wieder. Sie können nur ein Standard-Paket haben. Die Anwendung wählt es beim Öffnen vor und übernimmt die Einstellungen seiner Transkriptions-Voreinstellung. Der Abschnitt „Hochladen“ erklärt die Einzelheiten.
 
 ## Paket oder einzelne Schritte?
 

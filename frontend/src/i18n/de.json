@@ -21,6 +21,11 @@
     "initialPromptHelp": "Optionaler Kontext für die Transkription",
     "hotwords": "Schlüsselwörter",
     "hotwordsHelp": "Kommagetrennte Fachbegriffe",
+    "promptBudget": {
+      "usage": "Anfangs-Prompt und Schlüsselwörter belegen {{percent}} % des verfügbaren Platzes.",
+      "tooLong": "Anfangs-Prompt und Schlüsselwörter sind zusammen zu lang ({{percent}} % des verfügbaren Platzes). Bitte kürzen Sie sie.",
+      "rejected": "Anfangs-Prompt und Schlüsselwörter sind zusammen zu lang. Bitte kürzen Sie sie."
+    },
     "groups": {
       "presets": "Voreinstellungen",
       "transcription": "Transkription",
@@ -39,10 +44,10 @@
       "title": "API-Tokens",
       "createButton": "Token erstellen",
       "nameLabel": "Name",
+      "namePlaceholder": "z. B. mein-skript",
       "expiresLabel": "Läuft ab",
-      "expiry30": "30 Tage",
-      "expiry90": "90 Tage",
-      "expiry365": "365 Tage",
+      "expiryDays_one": "{{count}} Tag",
+      "expiryDays_other": "{{count}} Tage",
       "createCta": "Erstellen",
       "cancel": "Abbrechen",
       "revoke": "Widerrufen",
@@ -58,8 +63,19 @@
       "revoking": "Wird widerrufen…",
       "creating": "Wird erstellt…",
       "expiresOnTmpl": "läuft ab am {{date}}",
+      "expiringSoonTmpl": "„{{name}}“ läuft am {{date}} ab.",
+      "expiredTmpl": "„{{name}}“ ist am {{date}} abgelaufen.",
+      "expiryNote": "Tokens lassen sich nicht verlängern. Erstellen Sie einen neuen Token und ersetzen Sie den alten in Ihren Skripten.",
       "lastUsedTmpl": "zuletzt verwendet {{date}}",
-      "empty": "Noch keine API-Tokens. Erstellen Sie einen, um zu beginnen."
+      "empty": "Noch keine API-Tokens. Erstellen Sie einen, um zu beginnen.",
+      "errors": {
+        "duplicateName": "Ein aktiver Token mit diesem Namen existiert bereits.",
+        "limitReached": "Die maximale Anzahl aktiver Tokens ist erreicht.",
+        "notFound": "Dieser Token existiert nicht mehr.",
+        "createFailed": "Der Token konnte nicht erstellt werden.",
+        "revokeFailed": "Der Token konnte nicht widerrufen werden.",
+        "listFailed": "Die Tokens konnten nicht geladen werden."
+      }
     }
   },
   "transcription": {
@@ -70,6 +86,14 @@
     "success": "Transkription erfolgreich!",
     "failed": "Transkription fehlgeschlagen",
     "failedDetail": "Fehlermeldung: {{message}}",
+    "autoLanguageHint": "Als Sprache war „Automatisch erkennen“ eingestellt. Es kann helfen, die Sprache auszuwählen.",
+    "detectedLanguage": "Erkannte Sprache: {{language}}",
+    "errors": {
+      "server_restarted": "Der Server wurde neu gestartet, während diese Transkription lief.",
+      "timeout": "Die Spracherkennung hat diese Transkription nicht innerhalb des Zeitlimits abgeschlossen.",
+      "asr_unreachable": "Die Anfrage an die Spracherkennung ist fehlgeschlagen.",
+      "asr_failed": "Die Spracherkennung hat für diese Transkription einen Fehler gemeldet."
+    },
     "delete": "Transkription löschen",
     "history": "Meine Transkriptionen",
     "doubleClickToRename": "Doppelklick zum Umbenennen",
@@ -77,6 +101,12 @@
     "archived": "Archiviert",
     "expiresOn": "Läuft ab: {{date}}",
     "confirmDelete": "Sind Sie sicher, dass Sie diese Transkription löschen möchten? Dies kann nicht rückgängig gemacht werden.",
+    "status": {
+      "pending": "Wartend",
+      "processing": "In Bearbeitung",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen"
+    },
     "statusPending": "Wartet in der Warteschlange — bitte warten...",
     "statusProcessing": "Audio wird transkribiert — bitte warten, dies kann einige Minuten dauern.",
     "statusUploading": "Datei wird hochgeladen — bitte warten...",
@@ -85,7 +115,8 @@
     "summary": {
       "noLanguage": "automatisch",
       "speakersOff": "keine Sprechenden",
-      "speakersOne": "{{count}} Person",
+      "speakers_one": "{{count}} Person",
+      "speakers_other": "{{count}} Personen",
       "speakersRange": "{{min}}–{{max}} Personen",
       "viaBundle": "über Paket \"{{name}}\"",
       "line": "{{size}} · {{model}} · {{language}} · {{speakers}}"
@@ -109,7 +140,12 @@
     "download": "Herunterladen",
     "saveChanges": "Änderungen speichern",
     "restoreOriginal": "Original wiederherstellen",
-    "confirmRestore": "Alle ungespeicherten Änderungen verwerfen und die ursprüngliche Transkription wiederherstellen?",
+    "confirmRestore": "Die ursprüngliche Transkription in den Editor laden? Ungespeicherte Änderungen werden verworfen. Ihre gespeicherte Fassung wird erst ersetzt, wenn Sie auf „Änderungen speichern“ klicken.",
+    "saveFailed": "Speichern fehlgeschlagen.",
+    "restoreFailed": "Wiederherstellen fehlgeschlagen.",
+    "discardChanges": "Änderungen verwerfen",
+    "confirmDiscard": "Alle ungespeicherten Änderungen verwerfen und zur zuletzt gespeicherten Fassung zurückkehren?",
+    "discardFailed": "Verwerfen fehlgeschlagen.",
     "confirmTimestampCascade": "Diese Änderung passt die Zeitstempel von {{count}} benachbarten Zeile(n) an. Fortfahren?",
     "apply": "Anwenden",
     "generatingSummary": "Zusammenfassung wird erstellt...",
@@ -130,6 +166,7 @@
     "speakerRenamePlaceholder": "Neuer Name (leer lassen zum Beibehalten)",
     "speakerMergeHint": "Tipp: Geben Sie zwei Sprechenden denselben Namen, um sie zusammenzuführen.",
     "speakerMergedCount": "{{count}} zusammengeführt",
+    "speakerSaveFailed": "Speichern der Namen der Sprechenden fehlgeschlagen.",
     "noUtterances": "In dieser Aufnahme wurde keine Sprache erkannt.",
     "protocol": "Protokoll",
     "protocolLanguage": "Sprache des Protokolls",
@@ -180,6 +217,8 @@
     "translationWarningLong": "Diese Transkription hat {{count}} Äußerungen. Die Übersetzung kann mehrere Minuten dauern.",
     "originalText": "Original",
     "refinedText": "Verfeinert",
+    "compare": "Vergleichen",
+    "compareWithOriginal": "Mit Original vergleichen",
     "editSpeaker": "Namen der sprechenden Person bearbeiten",
     "renameAllSpeaker": "Diese Person in allen Äußerungen umbenennen",
     "editTimestamp": "Zeitstempel bearbeiten",
@@ -211,6 +250,7 @@
     "fromRefined": "aus Verfeinerung",
     "sourceStale": "Quelle hat neueren Inhalt",
     "sourceMissing": "Quelle nicht mehr verfügbar",
+    "translationReplacesStale": "Die veraltete Übersetzung wird ersetzt.",
     "refreshFromSource": "Mit gleicher Quelle erneut ausführen",
     "hotkeyLegend": "Tastenkürzel",
     "hotkeyTab": "Nächste Untertitel",
@@ -219,6 +259,8 @@
     "analysis": "Analyse"
   },
   "analysis": {
+    "removeChapter": "Kapitel entfernen",
+    "removeItem": "Eintrag entfernen",
     "selectTemplate": "Vorlage auswählen",
     "customPrompt": "Eigene Anweisung",
     "templateSummary": "Zusammenfassung mit Kapiteln",
@@ -244,6 +286,8 @@
     "newAnalysis": "+ Neue Analyse",
     "previousAnalyses": "Vorherige Analysen",
     "confirmDeleteAnalysis": "Diese Analyse löschen? Dies kann nicht rückgängig gemacht werden.",
+    "confirmDeleteItem": "Diesen Eintrag aus der Analyse entfernen?",
+    "deleteFailed": "Die Analyse konnte nicht gelöscht werden.",
     "collapseForm": "Abbrechen"
   },
   "presets": {
@@ -447,6 +491,7 @@
     "newRecording": "Aufnehmen",
     "presets": "Voreinstellungen",
     "settings": "Einstellungen",
+    "settingsAttention": "Ein API-Token läuft bald ab oder ist abgelaufen",
     "menu": "Menü"
   },
   "common": {
@@ -492,6 +537,32 @@
       "presets": "Voreinstellungen",
       "bundles": "Pakete",
       "api-access": "API-Zugriff"
+    },
+    "assistant": {
+      "tabManual": "Handbuch",
+      "tabAssistant": "Assistent",
+      "greeting": "Fragen Sie mich, wie etwas in transkribierBAR funktioniert.",
+      "starters": [
+        "Wie benenne ich die Sprechenden um?",
+        "Wie lade ich Untertitel als SRT herunter?",
+        "Wie lange werden meine Dateien aufbewahrt?"
+      ],
+      "placeholder": "Ihre Frage …",
+      "send": "Senden",
+      "newConversation": "Neues Gespräch",
+      "thinking": "Der Assistent schreibt …",
+      "noteModel": "Antworten erzeugt ein Sprachmodell. Sie können Fehler enthalten.",
+      "noteStorage": "transkribierBAR speichert dieses Gespräch nicht.",
+      "errors": {
+        "assistant_busy": "Es läuft bereits eine Anfrage.",
+        "llm_error": "Der Assistent konnte keine Antwort erzeugen.",
+        "server_error": "Der Assistent konnte keine Antwort erzeugen.",
+        "output_limit": "Die Antwort war zu lang und wurde abgeschnitten.",
+        "incomplete": "Die Antwort ist unvollständig angekommen.",
+        "network": "Die Verbindung zum Server ist fehlgeschlagen."
+      },
+      "retry": "Erneut versuchen",
+      "answerReady": "Antwort des Assistenten ist da."
     }
   },
   "invitations": {
