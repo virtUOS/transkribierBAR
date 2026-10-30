@@ -504,7 +504,7 @@ function MainApp() {
     setSubmittedSummary(null)
   }, [])
 
-  // A failed transcription opened from the overview: back to the settings for
+  // A failed transcription opened from the overview: to the upload settings for
   // its file, which is still on the server, to transcribe it again.
   const handleRetryFailed = useCallback(() => {
     const state = useStore.getState()
