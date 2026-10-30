@@ -40,8 +40,8 @@ NO_OPEN_TRANSCRIPTION_NOTE = (
     "tell them to open it and ask again from its page; do not list error codes."
 )
 OPEN_TRANSCRIPTION_NOTE = (
-    "- The user has this transcription open and you see it above. Answer from it; never tell them to "
-    "open it, retry it or ask again."
+    "- The user has this transcription open and you see it above. Answer from it, with what the Handbuch "
+    "says to do next; never tell them to open it or to ask you again."
 )
 
 # Filled manual per language; set by app.main at startup, tests may replace it.

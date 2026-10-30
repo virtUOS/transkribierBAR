@@ -33,6 +33,12 @@ def test_situation_ends_with_the_note_for_an_open_transcription():
     assert sa.NO_OPEN_TRANSCRIPTION_NOTE not in p
 
 
+def test_open_transcription_note_leaves_the_handbuch_retry_allowed():
+    # The Handbuch describes Try again on a failed transcription's page.
+    assert "retry" not in sa.OPEN_TRANSCRIPTION_NOTE.lower()
+    assert "what the Handbuch says to do next" in sa.OPEN_TRANSCRIPTION_NOTE
+
+
 def test_prompt_contains_instructions_view_and_manual():
     p = sa.build_system_prompt("de", "upload", None)
     assert 'You are the "Assistent" of transkribierBAR' in p
