@@ -17,5 +17,5 @@ httpx>=0.27.0
 python-dotenv>=1.0.0
 python-multipart>=0.0.12
 prometheus_client>=0.21.0
-openai>=3.37.0
+openai>=3.39.0
 tiktoken>=0.14.0
