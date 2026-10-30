@@ -29,20 +29,30 @@ export function ApiTokensSection() {
 
   const attention = tokensNeedingAttention(tokens)
 
+  // The list, and the account menu's reminder of tokens about to expire
+  const showTokens = useCallback((result: ApiToken[]) => {
+    setTokens(result)
+    useStore.getState().setTokenAttention(tokensNeedingAttention(result).length > 0)
+  }, [])
+
   const fetchTokens = useCallback(async () => {
     setError(null)
     try {
-      const result = await api.listApiTokens()
-      setTokens(result)
-      useStore.getState().setTokenAttention(tokensNeedingAttention(result).length > 0)
+      showTokens(await api.listApiTokens())
     } catch (e) {
       setError({ e, action: 'list' })
     }
-  }, [])
+  }, [showTokens])
 
+  // The first load sets state only once the list has arrived
   useEffect(() => {
-    fetchTokens()
-  }, [fetchTokens])
+    let current = true
+    api.listApiTokens().then(
+      (result) => { if (current) showTokens(result) },
+      (e) => { if (current) setError({ e, action: 'list' }) },
+    )
+    return () => { current = false }
+  }, [showTokens])
 
   async function handleRevoke(id: string) {
     setRevoking(id)

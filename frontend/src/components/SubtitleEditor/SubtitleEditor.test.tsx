@@ -675,3 +675,82 @@ describe('SubtitleEditor compare control', () => {
     expect(button.textContent).toBe('Vergleichen')
   })
 })
+
+describe('SubtitleEditor dialogs start from the current state', () => {
+  const llmConfig = {
+    asr_backend: 'murmurai',
+    whisper_models: [],
+    default_model: 'm',
+    llm_available: true,
+    logout_url: '',
+    popular_languages: [],
+    enabled_languages: [],
+  }
+  const refined = [
+    { start: 1500, end: 4000, text: 'Hello there.', speaker: 'SPEAKER_00' },
+    { start: 100000, end: 120000, text: 'General Kenobi.', speaker: 'SPEAKER_01' },
+  ]
+
+  function dialogTranslateButton() {
+    const buttons = screen.getAllByRole('button', { name: 'Translate' })
+    return buttons[buttons.length - 1]
+  }
+
+  it('translates the refined text by default each time the dialog opens', async () => {
+    useStore.setState({ config: llmConfig, refinedUtterances: refined })
+    vi.mocked(api.translateTranscription).mockRejectedValue(new Error('network'))
+    render(<SubtitleEditor />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Original' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+    fireEvent.click(dialogTranslateButton())
+
+    await waitFor(() => expect(api.translateTranscription).toHaveBeenCalled())
+    expect(vi.mocked(api.translateTranscription).mock.calls[0][2]).toBe('refined')
+  })
+
+  it('translates the original when it is chosen in the open dialog', async () => {
+    useStore.setState({ config: llmConfig, refinedUtterances: refined })
+    vi.mocked(api.translateTranscription).mockRejectedValue(new Error('network'))
+    render(<SubtitleEditor />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Original' }))
+    fireEvent.click(dialogTranslateButton())
+
+    await waitFor(() => expect(api.translateTranscription).toHaveBeenCalled())
+    expect(vi.mocked(api.translateTranscription).mock.calls[0][2]).toBe('original')
+  })
+
+  it('switches the open dialog to a refinement that arrives meanwhile', async () => {
+    useStore.setState({ config: llmConfig, refinedUtterances: null })
+    vi.mocked(api.translateTranscription).mockRejectedValue(new Error('network'))
+    render(<SubtitleEditor />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }))
+    act(() => useStore.setState({ refinedUtterances: refined }))
+    fireEvent.click(dialogTranslateButton())
+
+    await waitFor(() => expect(api.translateTranscription).toHaveBeenCalled())
+    expect(vi.mocked(api.translateTranscription).mock.calls[0][2]).toBe('refined')
+  })
+
+  it('fills the refinement context from the active bundle\'s preset', () => {
+    useStore.setState({
+      config: llmConfig,
+      activeBundleId: 'b1',
+      bundles: [{
+        id: 'b1', name: 'Bundle', transcription_preset_id: null, analysis_preset_id: null,
+        refinement_preset_id: 'rp1', translate_language: null, is_default: false, created_at: null, updated_at: null,
+      }],
+      refinementPresets: [{ id: 'rp1', name: 'Lecture', context: 'Biology lecture', created_at: null, updated_at: null }],
+    })
+    render(<SubtitleEditor />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refine with LLM' }))
+
+    expect(screen.getByPlaceholderText('e.g. Computer science lecture, speaker is Prof. Müller')).toHaveValue('Biology lecture')
+  })
+})

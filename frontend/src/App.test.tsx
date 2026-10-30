@@ -245,3 +245,65 @@ describe('A failed transcription opened from the overview', () => {
     expect(useStore.getState().currentView).toBe('archive')
   })
 })
+
+describe('Transcribing while the upload runs', () => {
+  const talk = { id: 'f2', original_filename: 'lecture.mp3', media_type: 'audio/mpeg', file_size: 2048, has_video: false }
+
+  it('starts the transcription once, when the file lands', async () => {
+    serve([])
+    vi.mocked(api.startTranscription).mockResolvedValue({ id: 't1', status: 'pending' })
+    useStore.setState({ file: null, uploading: true })
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Transcribe when ready' }))
+    expect(api.startTranscription).not.toHaveBeenCalled()
+
+    act(() => useStore.setState({ file: talk, uploading: false }))
+
+    await waitFor(() => expect(api.startTranscription).toHaveBeenCalledTimes(1))
+    expect(api.startTranscription).toHaveBeenCalledWith(expect.objectContaining({ file_id: 'f2' }))
+    expect(await screen.findByText('lecture.mp3')).toBeInTheDocument()
+    act(() => useStore.setState({ uploading: false }))
+    expect(api.startTranscription).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses the configured default model once the configuration arrives', async () => {
+    serve([])
+    vi.mocked(api.getConfig).mockResolvedValue({ ...config, default_model: 'large-v3' })
+    vi.mocked(api.startTranscription).mockResolvedValue({ id: 't1', status: 'pending' })
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Transcribe' }))
+
+    await waitFor(() => expect(api.startTranscription).toHaveBeenCalled())
+    expect(api.startTranscription).toHaveBeenCalledWith(expect.objectContaining({ model: 'large-v3' }))
+  })
+
+  it('drops a transcription still running when the person goes to the overview', async () => {
+    serve([])
+    useStore.setState({ transcriptionId: 'running', transcriptionStatus: 'processing' })
+    render(<App />)
+    await waitFor(() => expect(useStore.getState().config).not.toBeNull())
+    expect(useStore.getState().transcriptionId).toBe('running')
+
+    act(() => useStore.getState().setCurrentView('archive'))
+
+    expect(useStore.getState().transcriptionId).toBeNull()
+    expect(useStore.getState().transcriptionStatus).toBeNull()
+  })
+
+  it('forgets a failed start when the person leaves the upload view', async () => {
+    serve([])
+    vi.mocked(api.startTranscription).mockRejectedValue(new Error('Server unavailable'))
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Transcribe' }))
+    expect(await screen.findByText('Server unavailable')).toBeInTheDocument()
+
+    act(() => useStore.getState().setCurrentView('archive'))
+    act(() => useStore.getState().setCurrentView('upload'))
+
+    expect(screen.queryByText('Server unavailable')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Transcribe' })).toBeInTheDocument()
+  })
+})
