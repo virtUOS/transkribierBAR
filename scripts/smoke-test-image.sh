@@ -43,7 +43,7 @@ check() {
 check_filled() {
   local path=$1 body
   body=$(curl -fsS "$url$path") || { echo "FAIL $path: request failed"; return 1; }
-  if grep -o -- '__TW_[A-Z_]*__\|<!--/\?tw-feature:[a-z_]*-->' <<<"$body" | sort -u | grep .; then
+  if grep -o -- '__TW_[A-Za-z_]*__\|<!--/\?tw-feature:[a-z_]*-->' <<<"$body" | sort -u | grep .; then
     echo "FAIL $path: placeholders left in the page"
     return 1
   fi
