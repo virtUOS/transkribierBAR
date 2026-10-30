@@ -179,11 +179,6 @@ describe('CreateTokenModal', () => {
     await waitFor(() => expect(api.createApiToken).toHaveBeenCalledWith('x', 365))
   })
 
-  it.todo(
-    'shows the expiry that will actually be sent when API_TOKEN_DEFAULT_EXPIRY_DAYS is not 30/90/365 '
-    + '(bug https://github.com/virtUOS/transkribierBAR/issues/244: with e.g. 60 the select displays "30 days" but 60 is submitted — CreateTokenModal.tsx:16,125)',
-  )
-
   it('shows the secret once with a warning, and copies it', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })

@@ -142,11 +142,6 @@ describe('SpeakerMapping', () => {
     const inputs = screen.getAllByPlaceholderText(PLACEHOLDER)
     await waitFor(() => expect(inputs[1]).toHaveFocus())
   })
-
-  it.todo(
-    'shows an error when saving the names fails (bug https://github.com/virtUOS/transkribierBAR/issues/245: handleApply has no try/catch, so a failing '
-    + 'api.updateSpeakers becomes an unhandled rejection with no feedback — SpeakerMapping.tsx:103)',
-  )
 })
 
 describe('SpeakerMapping applying names', () => {

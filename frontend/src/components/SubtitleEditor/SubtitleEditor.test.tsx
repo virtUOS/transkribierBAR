@@ -255,11 +255,6 @@ describe('SubtitleEditor — editing', () => {
     expect(useStore.getState().unsavedEdits).toBe(false)
   })
 
-  it.todo(
-    'tells the user when saving fails (bug https://github.com/virtUOS/transkribierBAR/issues/246: handleSave only '
-    + 'logs the error to the console, so the user sees no message)',
-  )
-
   it('refreshes the refinement staleness after saving when a refinement exists', async () => {
     vi.mocked(api.saveTranscription).mockResolvedValue({ status: 'ok', edited: true })
     vi.mocked(api.getRefinement).mockResolvedValue({ utterances: [], metadata: meta(), stale: true })
@@ -317,12 +312,6 @@ describe('SubtitleEditor — editing', () => {
     expect(utterances()[1].speaker).toBe('Bob')
     expect(utterances()[3].speaker).toBe('SPEAKER_01')
   })
-
-  it.todo(
-    'leaves a mapped speaker untouched when its field is opened and left without changes '
-    + '(bug https://github.com/virtUOS/transkribierBAR/issues/243: the field is pre-filled with the display name and blur '
-    + 'always commits, so the speaker ID is replaced by the name)',
-  )
 
   it('opens the speaker panel focused on the clicked speaker', async () => {
     setup()
@@ -422,12 +411,6 @@ describe('SubtitleEditor — timestamps', () => {
     editTime(0, 1, '00:00:02')
     expect(utterances()[0]).toMatchObject({ start: 2000, end: 2000 })
   })
-
-  it.todo(
-    'opening and leaving a timestamp editor without changes keeps millisecond precision '
-    + '(bug https://github.com/virtUOS/transkribierBAR/issues/242: the field is pre-filled with formatTime(), which drops milliseconds, and blur always '
-    + 'commits — start 1500 becomes 1000 and the transcript turns dirty; SubtitleRow.tsx:106,145-149,162)',
-  )
 })
 
 describe('SubtitleEditor — timestamp fields', () => {

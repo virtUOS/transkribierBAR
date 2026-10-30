@@ -521,9 +521,4 @@ describe('AnalysisView — existing analyses', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Deleting the analysis failed.')
   })
-
-  it.todo(
-    'shows an error when deleting an analysis fails while the form is collapsed (bug https://github.com/virtUOS/transkribierBAR/issues/247: the error is '
-    + 'only rendered inside the generation form, which is hidden once analyses exist — AnalysisView.tsx:510,757)',
-  )
 })

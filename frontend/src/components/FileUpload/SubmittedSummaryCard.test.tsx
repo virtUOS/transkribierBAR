@@ -38,11 +38,6 @@ describe('SubmittedSummaryCard', () => {
     expect(screen.getByText('3.0 MB · large-v3 · xx · no speakers')).toBeInTheDocument()
   })
 
-  it.todo(
-    'pluralises an exact speaker count above one (bug https://github.com/virtUOS/transkribierBAR/issues/249: min=max=3 renders "3 speaker" / "3 Person"; '
-    + 'transcription.summary.speakersOne has no _other plural form — SubmittedSummaryCard.tsx:30, en.json/de.json:88)',
-  )
-
   it('names the bundle the settings came from', () => {
     render(<SubmittedSummaryCard summary={summary({ bundleName: 'Lecture' })} />)
     expect(screen.getByText('via "Lecture" bundle')).toBeInTheDocument()
