@@ -229,7 +229,7 @@ describe('SubtitleEditor — search', () => {
 
 describe('SubtitleEditor — editing', () => {
   it('edits text, marks the transcript dirty and saves all utterances', async () => {
-    vi.mocked(api.saveTranscription).mockResolvedValue({ status: 'ok' })
+    vi.mocked(api.saveTranscription).mockResolvedValue({ status: 'ok', edited: true })
     setup()
     expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
 
@@ -261,7 +261,7 @@ describe('SubtitleEditor — editing', () => {
   )
 
   it('refreshes the refinement staleness after saving when a refinement exists', async () => {
-    vi.mocked(api.saveTranscription).mockResolvedValue({ status: 'ok' })
+    vi.mocked(api.saveTranscription).mockResolvedValue({ status: 'ok', edited: true })
     vi.mocked(api.getRefinement).mockResolvedValue({ utterances: [], metadata: meta(), stale: true })
     setup({ unsavedEdits: true, refinementMetadata: meta(), refinedUtterances: base })
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
@@ -799,16 +799,15 @@ describe('SubtitleEditor — refinement', () => {
     expect(screen.getByText('This transcription has 51 utterances. Refinement may take several minutes.')).toBeInTheDocument()
   })
 
-  it('is read-only in the refined view and shows a diff for changed rows', () => {
+  it('is read-only in the refined view and compares changed rows with the original', () => {
     setup({ refinedUtterances: refined, refinementMetadata: meta(), activeView: 'refined' })
     expect(screen.queryAllByTitle('Edit text')).toHaveLength(0)
     expect(screen.queryAllByTitle('Delete this row')).toHaveLength(0)
-    fireEvent.click(bodyRows()[0])
+    // Unchanged rows have no compare button.
+    expect(row(2).queryByRole('button', { name: 'Compare with original' })).not.toBeInTheDocument()
+    fireEvent.click(row(0).getByRole('button', { name: 'Compare with original' }))
     expect(screen.getByText('Original:')).toBeInTheDocument()
     expect(screen.getByText('Hello world.')).toBeInTheDocument()
-    // Unchanged rows do not open a diff.
-    fireEvent.click(bodyRows()[2])
-    expect(screen.getAllByText('Original:')).toHaveLength(1)
   })
 
   it('switches between the original and refined views', () => {
@@ -1021,7 +1020,7 @@ describe('SubtitleEditor — translation', () => {
     const dialog = screen.getByRole('heading', { name: 'Translate to' }).parentElement!
     fireEvent.click(within(dialog).getByRole('button', { name: 'Translate' }))
     await waitFor(() => expect(useStore.getState().activeView).toBe('translated'))
-    expect(api.translateTranscription).toHaveBeenCalledWith('t1', 'de', undefined)
+    expect(api.translateTranscription).toHaveBeenCalledWith('t1', 'de', undefined, false)
     expect(screen.getByText('DE Hello world.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Translated (DE · from original)' })).toBeInTheDocument()
     expect(screen.queryAllByTitle('Edit text')).toHaveLength(0)
