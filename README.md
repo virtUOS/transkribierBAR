@@ -175,9 +175,12 @@ where users ask questions about using the app. It needs an LLM
 in-app help only: the build turns the help markdown into `dist/assistant/<lang>.md`,
 which the backend loads at startup.
 
-Each question, the earlier messages of that chat, and the user manual are sent
-to the configured LLM; nothing else is. Transcript text, files, analyses and
-translations are never sent. transkribierBAR stores no conversation and does not
+The question, the earlier messages of that chat, the user manual and a few facts
+about the situation are sent to the configured LLM: the current page, the
+interface language, the contact address and, for an open transcription of the
+user's own, its status, error code and message, requested and detected language,
+and speech recognition model. Transcript text, files, analyses and translations
+are never sent. transkribierBAR stores no conversation and does not
 log message content. Personal API tokens cannot use the assistant, and each user
 can have one question in progress at a time.
 
