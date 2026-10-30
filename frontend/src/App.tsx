@@ -270,7 +270,10 @@ function MainApp() {
       }
       setPopStateFlag(true)
       isPopStateNav.current = true
-      setCurrentView(e.state?.view ?? 'archive')
+      const view = e.state?.view ?? 'archive'
+      // A detail entry whose transcription was closed (Try again, a reset)
+      // would show an empty page.
+      setCurrentView(view === 'detail' && !state.transcriptionId ? 'archive' : view)
       setPopStateFlag(false)
     }
     window.addEventListener('popstate', handlePopState)

@@ -20,6 +20,8 @@ vi.mock('./api/client', async (importOriginal) => {
       promptBudget: vi.fn(),
       startTranscription: vi.fn(),
       getStatus: vi.fn(),
+      connectWebSocket: vi.fn(() => ({ close: vi.fn() })),
+      listTranscriptions: vi.fn(() => Promise.resolve([])),
     },
   }
 })
@@ -209,7 +211,7 @@ describe('A failed transcription opened from the overview', () => {
     )).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
 
-    expect(await screen.findByRole('button', { name: 'Transcribe' })).toBeInTheDocument()
+    const transcribe = await screen.findByRole('button', { name: 'Transcribe' })
     const state = useStore.getState()
     expect(state.currentView).toBe('upload')
     expect(state.transcriptionId).toBeNull()
@@ -217,5 +219,29 @@ describe('A failed transcription opened from the overview', () => {
     expect(state.transcriptionTitle).toBeNull()
     expect(state.file?.id).toBe('f1')
     expect(screen.getByText('talk.mp3')).toBeInTheDocument()
+
+    // The same file is transcribed again, without a new upload.
+    await waitFor(() => expect(transcribe).toBeEnabled())
+    vi.mocked(api.startTranscription).mockResolvedValue({ id: 't2', status: 'pending' })
+    fireEvent.click(transcribe)
+    await waitFor(() => expect(api.startTranscription).toHaveBeenCalledWith(expect.objectContaining({ file_id: 'f1' })))
+  })
+
+  it('goes to the overview, not an empty page, on Back after Try again', async () => {
+    serve([])
+    vi.mocked(api.promptBudget).mockResolvedValue({ tokens: 0, limit: 223 })
+    vi.mocked(api.getStatus).mockResolvedValue({
+      id: 't1', status: 'failed', progress: null, error: 'x', error_code: 'timeout',
+    })
+    useStore.setState({
+      currentView: 'detail', transcriptionId: 't1', transcriptionStatus: 'failed', transcriptionHistory: [failedItem],
+    })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+    await screen.findByRole('button', { name: 'Transcribe' })
+
+    act(() => { window.dispatchEvent(new PopStateEvent('popstate', { state: { view: 'detail' } })) })
+
+    expect(useStore.getState().currentView).toBe('archive')
   })
 })
