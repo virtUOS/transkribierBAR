@@ -102,6 +102,30 @@ describe('TranscriptionProgressCard failure reason', () => {
     expect(screen.getByText(/asr exploded/)).toBeInTheDocument()
   })
 
+  it('loads the reason of a transcription that is already failed when it opens', async () => {
+    // Opened from the overview: no socket, so the reason has to be fetched.
+    useStore.setState({ transcriptionStatus: 'failed' })
+    vi.mocked(api.getStatus).mockResolvedValue({
+      id: 't1', status: 'failed', progress: null, error: 'ASR job exceeded 1800s', error_code: 'timeout',
+    })
+
+    render(<TranscriptionProgressCard autoLanguage />)
+
+    expect(await screen.findByText(germanDetail('transcription.errors.timeout'))).toBeInTheDocument()
+    expect(api.getStatus).toHaveBeenCalledWith('t1')
+    expect(api.connectWebSocket).not.toHaveBeenCalled()
+    expect(screen.queryByText(germanHint())).toBeNull()
+  })
+
+  it('shows the language hint for an already failed Auto-detect transcription', async () => {
+    useStore.setState({ transcriptionStatus: 'failed' })
+    vi.mocked(api.getStatus).mockResolvedValue({ id: 't1', status: 'failed', progress: null, error: 'x', error_code: 'asr_failed' })
+
+    render(<TranscriptionProgressCard autoLanguage />)
+
+    expect(await screen.findByText(germanHint())).toBeInTheDocument()
+  })
+
   it('shows a known reason from the status poll in the German UI', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
     vi.mocked(api.getStatus).mockResolvedValue({
