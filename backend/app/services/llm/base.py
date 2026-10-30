@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 
 from app.config import settings
 from app.metrics import inc, refinement_failed_chunks_total
@@ -243,6 +244,19 @@ class LLMProvider(ABC):
     @abstractmethod
     async def generate_title(self, transcript: str) -> str:
         """Generate a short title from transcript text."""
+
+    def stream_chat(
+        self, messages: list[dict], operation: str, max_tokens: int
+    ) -> AsyncIterator[str]:
+        """Stream a chat reply as content text chunks.
+
+        Providers override this as an async generator. It raises
+        OutputLimitExceeded after the last chunk when the reply hit
+        `max_tokens`, and tracks token usage once with the final usage.
+        Closing the generator early closes the upstream response. Not
+        abstract: only providers that serve the support assistant need it.
+        """
+        raise NotImplementedError
 
     async def generate_summary(
         self, transcript: str, chapter_hints: list | None = None, language: str | None = None
