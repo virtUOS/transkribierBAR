@@ -34,9 +34,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg pulseaudio
 
-      # The runner has no audio output. Without one, Firefox never starts an
-      # AudioContext, which the recorder uses for its start beep and for mixing
-      # a second input. A null sink stands in for the speakers of a desktop.
+      # The runner has no audio output. Without one, Firefox never runs an
+      # AudioContext, and the recorder mixes the second input of Firefox's
+      # dual-device mode in one: that recording would hold only silence, which
+      # the recorder spec checks. A null sink stands in for a desktop's speakers.
+      # (The start beep no longer needs it: it stopped blocking recording in #260.)
       - name: Start an audio server with a null sink
         run: |
           pulseaudio --start --exit-idle-time=-1

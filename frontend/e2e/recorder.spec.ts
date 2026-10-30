@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
 
@@ -39,22 +41,38 @@ async function openRecorder(page: Page): Promise<void> {
 }
 
 /** Record for a moment, stop, and wait until the recording is uploaded and ready to transcribe. */
-async function recordAndUpload(page: Page): Promise<string> {
+async function recordAndUpload(page: Page): Promise<{ id: string; original_filename: string }> {
   const uploaded = page.waitForResponse((r) => r.url().includes('/api/upload') && r.ok())
   await page.locator('[data-help="record-start"]').click()
   await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible()
   await page.waitForTimeout(1500)
   await page.getByRole('button', { name: 'Stop' }).click()
-  const file = (await (await uploaded).json()) as { original_filename: string }
+  const file = (await (await uploaded).json()) as { id: string; original_filename: string }
   await expect(page.locator('[data-help="transcribe-start"]')).toBeVisible()
-  return file.original_filename
+  return file
+}
+
+/**
+ * The loudest moment of an uploaded recording, in dB (ffmpeg's volumedetect),
+ * or -Infinity when it has no audio. The fake ASR ignores the audio, so this
+ * is what shows that the microphone's tone made it into the file.
+ */
+async function recordedPeakDb(page: Page, fileId: string): Promise<number> {
+  const media = await page.request.get(`/api/media/${fileId}`)
+  expect(media.ok()).toBe(true)
+  const path = test.info().outputPath('recording.webm')
+  writeFileSync(path, await media.body())
+  const ff = spawnSync('ffmpeg', ['-hide_banner', '-nostats', '-i', path, '-af', 'volumedetect', '-f', 'null', '-'])
+  const peak = /max_volume: (-?[\d.]+|-inf) dB/.exec(ff.stderr?.toString() ?? '')
+  return peak && peak[1] !== '-inf' ? Number(peak[1]) : -Infinity
 }
 
 test('a microphone recording is uploaded and transcribed', async ({ page }) => {
   await openRecorder(page)
-  const filename = await recordAndUpload(page)
+  const file = await recordAndUpload(page)
   // Both browsers record WebM/Opus; the backend converts it like any upload.
-  expect(filename).toMatch(/^recording-.*\.webm$/)
+  expect(file.original_filename).toMatch(/^recording-.*\.webm$/)
+  expect(await recordedPeakDb(page, file.id)).toBeGreaterThan(-50)
 
   await page.locator('[data-help="transcribe-start"]').click()
   await expect(page.locator('table tbody tr')).toHaveCount(4, { timeout: 20_000 })
@@ -99,9 +117,13 @@ test('Firefox on Linux mixes a second input device in as system audio', async ({
   // The only other input is picked automatically.
   await expect(page.locator('output').filter({ hasText: 'Monitor of e2e output' })).toBeVisible()
 
-  const filename = await recordAndUpload(page)
-  expect(filename).toMatch(/\.webm$/)
+  const file = await recordAndUpload(page)
+  expect(file.original_filename).toMatch(/\.webm$/)
   expect(await page.evaluate('window.e2eMonitorOpened')).toBe(true)
+  // The two inputs are mixed in an AudioContext, which Firefox does not run
+  // without an audio output: the recording then holds only silence. CI gives
+  // Firefox a PulseAudio null sink for this (.github/workflows/e2e-tests.yaml).
+  expect(await recordedPeakDb(page, file.id)).toBeGreaterThan(-50)
   await page.locator('[data-help="transcribe-start"]').click()
   await expect(page.locator('table tbody tr')).toHaveCount(4, { timeout: 20_000 })
 })
