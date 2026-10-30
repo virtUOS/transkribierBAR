@@ -68,3 +68,20 @@ async def test_config_reports_assistant_availability(monkeypatch, flag, provider
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         data = (await client.get("/api/config")).json()
     assert data["support_assistant_enabled"] is expected
+
+
+@pytest.mark.parametrize("flag", [True, False])
+def test_lifespan_loads_corpora_only_when_enabled(monkeypatch, tmp_path, flag):
+    from unittest.mock import patch
+    from fastapi.testclient import TestClient
+
+    import app.main as main_module
+
+    # Other tests reload app.config; patch the settings object main actually uses.
+    live = main_module.settings
+    monkeypatch.setattr(live, "DATABASE_PATH", str(tmp_path / "startup.db"))
+    monkeypatch.setattr(live, "ENABLE_SUPPORT_ASSISTANT", flag)
+    with patch.object(support_assistant, "load_corpora", return_value={}) as load:
+        with TestClient(app):
+            pass
+    assert load.called is flag

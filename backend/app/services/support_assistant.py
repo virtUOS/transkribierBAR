@@ -29,6 +29,8 @@ VIEW_DESCRIPTIONS: dict[str, str] = {
     "settings": "the settings page",
 }
 
+ERROR_MESSAGE_MAX = 300
+
 # Filled manual per language; set by app.main at startup, tests may replace it.
 CORPORA: dict[Lang, str] = {}
 
@@ -86,16 +88,22 @@ def build_system_prompt(lang: Lang, view: str, situation: dict | None) -> str:
         lines.append(f"- Open transcription status: {situation['status']}")
         if situation.get("error_code"):
             lines.append(f"- Error code: {situation['error_code']}")
-        if situation.get("error_message"):
-            lines.append(f"- Error message: {situation['error_message']}")
+        message = " ".join(str(situation.get("error_message") or "").split())
+        if message:
+            if len(message) > ERROR_MESSAGE_MAX:
+                message = message[:ERROR_MESSAGE_MAX] + "…"
+            lines.append(f"- Error message: {message}")
         lines.append(f"- Requested language: {situation.get('language') or 'Auto-detect'}")
         if situation.get("detected_language"):
             lines.append(f"- Detected language: {situation['detected_language']}")
-        lines.append(f"- Speech recognition model: {situation.get('model')}")
+        if situation.get("model"):
+            lines.append(f"- Speech recognition model: {situation['model']}")
+    # The situation goes last: instructions + manual are identical for every request
+    # of one language, so the LLM server's prefix cache can reuse them.
     return (
         INSTRUCTIONS.replace("{contact}", contact)
-        + "\n\n## Situation\n"
-        + "\n".join(lines)
         + "\n\n## Handbuch\n\n"
         + CORPORA[lang]
+        + "\n\n## Situation\n"
+        + "\n".join(lines)
     )

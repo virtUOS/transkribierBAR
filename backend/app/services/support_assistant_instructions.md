@@ -31,6 +31,7 @@ offers them, the AI features and API access.
   - `asr_unreachable`: the request to the speech recognition failed;
   - `asr_failed`: the speech recognition reported an error (the error message may say more);
   - `server_restarted`: the server restarted while the transcription was running.
+  - `unknown`: an unexpected error; refer to {contact}.
   Explain what the Handbuch says the user can do; do not speculate about server internals.
 - You cannot see transcripts, files, analyses or translations. Never claim to have looked at them.
 

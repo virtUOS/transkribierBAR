@@ -318,6 +318,10 @@ def init_label_series() -> None:
     # The duration histogram is seeded for the same reason: its _sum and _count
     # otherwise appear at their first value, and increase() over a series with
     # no earlier sample is 0, so the first call after a restart never shows.
+    if settings.ENABLE_SUPPORT_ASSISTANT and support_assistant_requests_total is not None:
+        for result in ("ok", "busy", "llm_error", "output_limit", "aborted"):
+            support_assistant_requests_total.labels(result).inc(0)
+
     if llm_requests_total is not None and llm_errors_total is not None:
         provider = settings.LLM_PROVIDER
         model = settings.LLM_MODEL

@@ -15,7 +15,9 @@ def test_prompt_contains_instructions_view_and_manual():
     assert 'You are the "Assistent" of transkribierBAR' in p
     assert "Current view: upload (uploading a file" in p
     assert "Interface language: German" in p
-    assert p.endswith("HANDBUCH-DE")
+    assert "## Handbuch\n\nHANDBUCH-DE\n\n## Situation\n" in p
+    assert p.index("HANDBUCH-DE") < p.index("## Situation")
+    assert p.rstrip().splitlines()[-1].startswith("- Current view:")
     assert "MANUAL-EN" not in p
     assert "Open transcription" not in p
 
@@ -62,3 +64,25 @@ async def test_situation_ignores_other_users_transcription():
     await _insert()
     assert await sa.load_situation("someone-else", "t-1") is None
     assert await sa.load_situation("owner", None) is None
+
+
+def test_situation_sanitises_message_and_skips_null_model():
+    s = {
+        "status": "failed", "error_code": "asr_failed", "language": "de",
+        "detected_language": None, "model": None,
+        "error_message": "line one\n\n  line\ttwo " + "x" * 400,
+    }
+    p = sa.build_system_prompt("en", "detail", s)
+    line = next(ln for ln in p.splitlines() if ln.startswith("- Error message: "))
+    msg = line[len("- Error message: "):]
+    assert msg.startswith("line one line two xxx")
+    assert len(msg) == 301 and msg.endswith("…")
+    assert "Speech recognition model" not in p
+    short = dict(s, error_message="a\nb", model="m")
+    p = sa.build_system_prompt("en", "detail", short)
+    assert "- Error message: a b\n" in p
+    assert "Speech recognition model: m" in p
+
+
+def test_instructions_list_unknown_error_code():
+    assert "- `unknown`: an unexpected error; refer to {contact}." in sa.INSTRUCTIONS

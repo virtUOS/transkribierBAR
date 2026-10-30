@@ -97,7 +97,11 @@ async def _event_stream(
                 except OutputLimitExceeded:
                     result = "output_limit"
         except Exception as e:
-            logger.warning("support assistant LLM call failed: %s", type(e).__name__)
+            logger.warning(
+                "support assistant LLM call failed: %s (status %s)",
+                type(e).__name__,
+                getattr(e, "status_code", None),
+            )
             result = "llm_error"
         if result == "ok":
             yield _event({}, "done")

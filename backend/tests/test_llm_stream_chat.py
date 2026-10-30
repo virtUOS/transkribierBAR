@@ -167,3 +167,40 @@ async def test_ollama_stream_early_close_closes_upstream():
         assert seen["exited"] is False
         await gen.aclose()
     assert seen["exited"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("chars,expected", [(100, 8192), (90000, 32768), (10_000_000, 65536)])
+async def test_ollama_stream_sends_num_ctx_sized_from_the_prompt(chars, expected):
+    fake, seen = _ollama(_ndjson("stop"))
+    provider = OllamaProvider()
+    messages = [{"role": "system", "content": "x" * chars}]
+    with patch("httpx.AsyncClient.stream", fake), \
+            patch("app.services.llm.ollama.track_llm_tokens"):
+        await _collect(provider.stream_chat(messages, "support", 1500))
+    assert seen["json"]["options"]["num_ctx"] == expected
+
+
+@pytest.mark.asyncio
+async def test_ollama_stream_error_line_raises():
+    lines = [
+        json.dumps({"message": {"content": "Hal"}, "done": False}),
+        json.dumps({"error": "model runner crashed"}),
+    ]
+    fake, _ = _ollama(lines)
+    provider = OllamaProvider()
+    with patch("httpx.AsyncClient.stream", fake), \
+            patch("app.services.llm.ollama.track_llm_tokens"):
+        with pytest.raises(RuntimeError):
+            await _collect(provider.stream_chat(MESSAGES, "support", 1500))
+
+
+@pytest.mark.asyncio
+async def test_ollama_stream_without_done_raises():
+    lines = [json.dumps({"message": {"content": "Hal"}, "done": False})]
+    fake, _ = _ollama(lines)
+    provider = OllamaProvider()
+    with patch("httpx.AsyncClient.stream", fake), \
+            patch("app.services.llm.ollama.track_llm_tokens"):
+        with pytest.raises(RuntimeError):
+            await _collect(provider.stream_chat(MESSAGES, "support", 1500))

@@ -260,7 +260,10 @@ async def cleanup_old_files():
 async def lifespan(app: FastAPI):
     os.makedirs(settings.TEMP_PATH, exist_ok=True)
     public_pages.NOTICES = load_privacy_notices()
-    support_assistant.CORPORA = support_assistant.load_corpora(settings.STATIC_DIR, bool(public_pages.NOTICES))
+    if settings.ENABLE_SUPPORT_ASSISTANT:
+        support_assistant.CORPORA = support_assistant.load_corpora(
+            settings.STATIC_DIR, bool(public_pages.NOTICES)
+        )
     await init_db(settings.db_path)
     interrupted_job_ids = await fail_interrupted_transcriptions()
     await clear_interrupted_llm_steps()
