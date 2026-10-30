@@ -47,7 +47,7 @@ describe('assistant store', () => {
     expect(t[t.length - 1]).toEqual(msgs[24])
 
     const big: AssistantMessage[] = [
-      { role: 'user', content: 'a'.repeat(30000) },
+      { role: 'user', content: 'a'.repeat(40000) },
       { role: 'assistant', content: 'b'.repeat(30000) },
       { role: 'user', content: 'c'.repeat(10) },
     ]
@@ -119,5 +119,48 @@ describe('assistant store', () => {
     expect(s.assistantMessages).toEqual([])
     expect(s.assistantError).toBeNull()
     expect(s.assistantStatus).toBe('idle')
+  })
+
+  it('reset keeps the conversation and does not abort a running request', async () => {
+    let signal: AbortSignal | undefined
+    mockStream.mockImplementation((_b, opts: Opts) => {
+      signal = opts.signal
+      return new Promise<void>(() => {})
+    })
+    void useStore.getState().sendAssistantMessage('Wie?')
+    useStore.getState().reset()
+    expect(signal?.aborted).toBe(false)
+    const s = useStore.getState()
+    expect(s.assistantMessages[0]).toEqual({ role: 'user', content: 'Wie?' })
+    expect(s.assistantStatus).toBe('streaming')
+  })
+
+  it('trimHistory clamps over-long assistant messages to 8000 characters', () => {
+    const msgs: AssistantMessage[] = [
+      { role: 'user', content: 'q' },
+      { role: 'assistant', content: 'x'.repeat(9000) },
+      { role: 'user', content: 'q2' },
+    ]
+    const t = trimHistory(msgs)
+    expect(t[1].content).toHaveLength(8000)
+    expect(t[1].content).toBe('x'.repeat(8000))
+  })
+
+  it('an empty answer that ends with done is removed and reported as incomplete', async () => {
+    mockStream.mockResolvedValue(undefined)
+    await useStore.getState().sendAssistantMessage('Wie?')
+    const s = useStore.getState()
+    expect(s.assistantMessages).toEqual([{ role: 'user', content: 'Wie?' }])
+    expect(s.assistantError).toBe('incomplete')
+    expect(s.assistantStatus).toBe('idle')
+  })
+
+  it('opening help with a section shows the manual tab', () => {
+    useStore.setState({ helpTab: 'assistant' })
+    useStore.getState().setHelpOpen(true, 'getting-started')
+    expect(useStore.getState().helpTab).toBe('manual')
+    useStore.setState({ helpTab: 'assistant' })
+    useStore.getState().setHelpOpen(true)
+    expect(useStore.getState().helpTab).toBe('assistant')
   })
 })

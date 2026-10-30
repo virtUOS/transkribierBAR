@@ -4,13 +4,34 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Components } from 'react-markdown'
 import { useStore } from '../../store'
-import { HelpLink } from './HelpLink'
+import type { ComponentProps } from 'react'
 
 const STARTER_COUNT = 3
 const FOCUS_RING = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500'
 
+type LinkProps = ComponentProps<'a'> & { node?: unknown }
+
+// Answers are model output: a link must never navigate the SPA in place (that would
+// drop a running upload or recording), so unknown targets render as plain text.
+function AnswerLink({ href, children, node: _node, ...props }: LinkProps) {
+  void _node
+  const safe =
+    !!href &&
+    (href.startsWith('http://') ||
+      href.startsWith('https://') ||
+      href.startsWith('mailto:') ||
+      href.startsWith('/handbuch/') ||
+      href.startsWith(`${import.meta.env.BASE_URL}handbuch/`))
+  if (!safe) return <>{children}</>
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline" {...props}>
+      {children}
+    </a>
+  )
+}
+
 const answerComponents: Components = {
-  a: HelpLink,
+  a: AnswerLink,
   p: ({ node: _node, ...props }) => {
     void _node
     return <p className="mb-2 last:mb-0 leading-relaxed" {...props} />
@@ -62,6 +83,11 @@ export function AssistantChat() {
     setAnnouncement(finished ? t('help.assistant.answerReady') : '')
   }
 
+  const startOver = () => {
+    reset()
+    inputRef.current?.focus()
+  }
+
   const submit = (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || streaming) return
@@ -75,7 +101,7 @@ export function AssistantChat() {
       <div className="flex items-center justify-end px-6 pt-3">
         <button
           type="button"
-          onClick={reset}
+          onClick={startOver}
           disabled={messages.length === 0 && !error}
           className={`text-sm text-blue-400 hover:text-blue-300 underline disabled:opacity-40 disabled:no-underline rounded ${FOCUS_RING}`}
         >

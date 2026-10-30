@@ -72,6 +72,38 @@ describe('AssistantChat', () => {
     expect(screen.getByText('Fragen Sie mich, wie etwas in transkribierBAR funktioniert.')).toBeInTheDocument()
   })
 
+  it('new conversation moves focus to the textarea', async () => {
+    mockStream.mockImplementation(async (_b, opts: Opts) => opts.onDelta('Antwort'))
+    render(<AssistantChat />)
+    const box = screen.getByPlaceholderText('Ihre Frage …')
+    fireEvent.change(box, { target: { value: 'Frage' } })
+    fireEvent.keyDown(box, { key: 'Enter' })
+    await screen.findByText('Antwort')
+    const btn = screen.getByRole('button', { name: 'Neues Gespräch' })
+    btn.focus()
+    fireEvent.click(btn)
+    expect(document.activeElement).toBe(box)
+  })
+
+  it('answer links open in a new tab only for safe targets; others render as text', async () => {
+    mockStream.mockImplementation(async (_b, opts: Opts) =>
+      opts.onDelta('[Web](https://example.org) [Mail](mailto:a@b.de) [Guide](/handbuch/x) [Evil](/api/tokens) [JS](javascript:alert(1))'),
+    )
+    render(<AssistantChat />)
+    const box = screen.getByPlaceholderText('Ihre Frage …')
+    fireEvent.change(box, { target: { value: 'Frage' } })
+    fireEvent.keyDown(box, { key: 'Enter' })
+    for (const name of ['Web', 'Mail', 'Guide']) {
+      const a = await screen.findByRole('link', { name })
+      expect(a).toHaveAttribute('target', '_blank')
+      expect(a).toHaveAttribute('rel', 'noopener noreferrer')
+    }
+    expect(screen.queryByRole('link', { name: 'Evil' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'JS' })).not.toBeInTheDocument()
+    expect(screen.getByText(/Evil/)).toBeInTheDocument()
+    expect(screen.getByText(/JS/)).toBeInTheDocument()
+  })
+
   it('renders both notes', () => {
     render(<AssistantChat />)
     expect(screen.getByText('Antworten erzeugt ein Sprachmodell. Sie können Fehler enthalten.')).toBeInTheDocument()

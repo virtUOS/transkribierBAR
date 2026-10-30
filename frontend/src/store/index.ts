@@ -114,12 +114,17 @@ const clearedTranscriptionState = {
   analyses: [],
 }
 
+const ASSISTANT_MESSAGE_MAX = 8000
+
 /** Newest messages that fit the endpoint's limits; never starts with an assistant message. */
 export function trimHistory(messages: AssistantMessage[], maxMessages = 20, maxChars = 48000): AssistantMessage[] {
-  let start = Math.max(0, messages.length - maxMessages)
-  const total = (from: number) => messages.slice(from).reduce((n, m) => n + m.content.length, 0)
-  while (start < messages.length && (total(start) > maxChars || messages[start].role === 'assistant')) start++
-  return messages.slice(start)
+  const clamped = messages.map((m) =>
+    m.role === 'assistant' && m.content.length > ASSISTANT_MESSAGE_MAX ? { ...m, content: m.content.slice(0, ASSISTANT_MESSAGE_MAX) } : m,
+  )
+  let start = Math.max(0, clamped.length - maxMessages)
+  const total = (from: number) => clamped.slice(from).reduce((n, m) => n + m.content.length, 0)
+  while (start < clamped.length && (total(start) > maxChars || clamped[start].role === 'assistant')) start++
+  return clamped.slice(start)
 }
 
 let assistantAbort: AbortController | null = null
@@ -175,7 +180,15 @@ export const useStore = create<AppState>((set, get) => {
           },
         },
       )
-      if (assistantAbort === controller) set({ assistantStatus: 'idle' })
+      if (assistantAbort === controller) {
+        const msgs = get().assistantMessages
+        const last = msgs[msgs.length - 1]
+        if (last && last.role === 'assistant' && last.content === '') {
+          set({ assistantMessages: msgs.slice(0, -1), assistantStatus: 'idle', assistantError: 'incomplete' })
+        } else {
+          set({ assistantStatus: 'idle' })
+        }
+      }
     } catch (err) {
       if (assistantAbort !== controller) return // reset while streaming
       const msgs = get().assistantMessages
@@ -303,7 +316,11 @@ export const useStore = create<AppState>((set, get) => {
   helpOpen: false,
   helpInitialSection: null,
   setHelpOpen: (open, initialSection) =>
-    set({ helpOpen: open, helpInitialSection: initialSection ?? null }),
+    set({
+      helpOpen: open,
+      helpInitialSection: initialSection ?? null,
+      ...(initialSection ? { helpTab: 'manual' as const } : {}),
+    }),
   closeHelp: () => set({ helpOpen: false }),
   helpTab: 'manual' as const,
   setHelpTab: (tab) => set({ helpTab: tab }),
@@ -329,11 +346,7 @@ export const useStore = create<AppState>((set, get) => {
   clearRefinement: () => set({ refinedUtterances: null, refinementMetadata: null, refinementStale: false, activeView: 'original' as const }),
   clearTranscriptionState: () => set(clearedTranscriptionState),
   reset: () => {
-    assistantAbort?.abort()
-    assistantAbort = null
     set({
-    ...clearedAssistantState,
-    helpTab: 'manual' as const,
     ...clearedTranscriptionState,
     currentView: 'archive' as const,
     file: null, uploading: false, uploadAbortController: null, recordingActive: false,
