@@ -44,6 +44,7 @@ export function AssistantChat() {
   const [draft, setDraft] = useState('')
   const [announcement, setAnnouncement] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const [prevStatus, setPrevStatus] = useState(status)
   const streaming = status === 'streaming'
   const last = messages[messages.length - 1]
@@ -57,13 +58,15 @@ export function AssistantChat() {
   // Announce once when a stream ends without an error (state adjusted during render).
   if (prevStatus !== status) {
     setPrevStatus(status)
-    setAnnouncement(prevStatus === 'streaming' && !error ? t('help.assistant.answerReady') : '')
+    const finished = prevStatus === 'streaming' && !error && last?.role === 'assistant' && last.content !== ''
+    setAnnouncement(finished ? t('help.assistant.answerReady') : '')
   }
 
   const submit = (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || streaming) return
     setDraft('')
+    inputRef.current?.focus()
     void send(trimmed)
   }
 
@@ -149,10 +152,12 @@ export function AssistantChat() {
             }}
             maxLength={4000}
             rows={2}
-            disabled={streaming}
+            ref={inputRef}
+            readOnly={streaming}
+            aria-disabled={streaming}
             placeholder={t('help.assistant.placeholder')}
             aria-label={t('help.assistant.placeholder')}
-            className={`flex-1 resize-none bg-gray-800 text-white text-sm rounded border border-gray-700 px-3 py-2 disabled:opacity-50 ${FOCUS_RING}`}
+            className={`flex-1 resize-none bg-gray-800 text-white text-sm rounded border border-gray-700 px-3 py-2 aria-disabled:opacity-50 ${FOCUS_RING}`}
           />
           <button
             type="submit"

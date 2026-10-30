@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { AssistantStreamError, streamAssistantChat } from '../../api/client'
 import { useStore } from '../../store'
 import i18n from '../../i18n'
@@ -76,5 +76,71 @@ describe('AssistantChat', () => {
     render(<AssistantChat />)
     expect(screen.getByText('Antworten erzeugt ein Sprachmodell. Sie können Fehler enthalten.')).toBeInTheDocument()
     expect(screen.getByText('transkribierBAR speichert dieses Gespräch nicht.')).toBeInTheDocument()
+  })
+
+  describe('announcement and focus', () => {
+    function deferStream() {
+      let finish: () => void = () => {}
+      let fail: (e: Error) => void = () => {}
+      mockStream.mockImplementation(
+        (_b, opts: Opts) =>
+          new Promise<void>((resolve, reject) => {
+            opts.onDelta('Antwort')
+            finish = resolve
+            fail = reject
+          }),
+      )
+      return { finish: () => finish(), fail: (e: Error) => fail(e) }
+    }
+    const ask = () => {
+      const box = screen.getByPlaceholderText('Ihre Frage …')
+      fireEvent.change(box, { target: { value: 'Frage' } })
+      fireEvent.keyDown(box, { key: 'Enter' })
+    }
+
+    it('does not announce on mount', () => {
+      render(<AssistantChat />)
+      expect(screen.getByRole('status')).toBeEmptyDOMElement()
+    })
+
+    it('announces exactly once after a finished answer', async () => {
+      const d = deferStream()
+      render(<AssistantChat />)
+      ask()
+      await screen.findByText('Antwort')
+      expect(screen.getByRole('status')).toBeEmptyDOMElement()
+      await act(async () => d.finish())
+      expect(screen.getAllByText('Antwort des Assistenten ist da.')).toHaveLength(1)
+    })
+
+    it('does not announce when the conversation is reset mid-stream', async () => {
+      deferStream()
+      render(<AssistantChat />)
+      ask()
+      await screen.findByText('Antwort')
+      fireEvent.click(screen.getByRole('button', { name: 'Neues Gespräch' }))
+      expect(screen.getByRole('status')).toBeEmptyDOMElement()
+    })
+
+    it('does not announce on an error', async () => {
+      const d = deferStream()
+      render(<AssistantChat />)
+      ask()
+      await screen.findByText('Antwort')
+      await act(async () => d.fail(new AssistantStreamError('incomplete')))
+      expect(await screen.findByText('Die Antwort ist unvollständig angekommen.')).toBeInTheDocument()
+      expect(screen.getByRole('status')).toBeEmptyDOMElement()
+    })
+
+    it('keeps focus in the textarea after a starter is sent and the stream finishes', async () => {
+      const d = deferStream()
+      render(<AssistantChat />)
+      fireEvent.click(screen.getByRole('button', { name: 'Wie benenne ich die Sprechenden um?' }))
+      await screen.findByText('Antwort')
+      const box = screen.getByPlaceholderText('Ihre Frage …')
+      expect(box).toHaveFocus()
+      await act(async () => d.finish())
+      expect(box).toHaveFocus()
+    })
   })
 })
