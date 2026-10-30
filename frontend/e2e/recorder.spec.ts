@@ -40,11 +40,18 @@ async function openRecorder(page: Page): Promise<void> {
   await expect(page.locator('[data-help="record-mic-device"]')).toBeVisible()
 }
 
-/** Record for a moment, stop, and wait until the recording is uploaded and ready to transcribe. */
-async function recordAndUpload(page: Page): Promise<{ id: string; original_filename: string }> {
+/**
+ * Record for a moment, stop, and wait until the recording is uploaded and ready
+ * to transcribe. `started` resolves once the recording has really begun.
+ */
+async function recordAndUpload(
+  page: Page,
+  started: () => Promise<void> = async () => {},
+): Promise<{ id: string; original_filename: string }> {
   const uploaded = page.waitForResponse((r) => r.url().includes('/api/upload') && r.ok())
   await page.locator('[data-help="record-start"]').click()
   await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible()
+  await started()
   await page.waitForTimeout(1500)
   await page.getByRole('button', { name: 'Stop' }).click()
   const file = (await (await uploaded).json()) as { id: string; original_filename: string }
@@ -88,16 +95,11 @@ test('the system-audio option explains what this browser can capture', async ({ 
 })
 
 test('Firefox on Linux mixes a second input device in as system audio', async ({ page, browserName }) => {
-  await page.goto('/')
-  test.skip(
-    (await expectedSystemAudioSupport(page, browserName)) !== 'dual-device',
-    'the app offers the dual-device mode only in Firefox on Linux',
-  )
-
   // Firefox offers a single fake microphone, so a second input (standing in for
   // a PulseAudio/PipeWire monitor source) is added to the device list and
   // answered with the same fake stream. Everything after that is the app's own
   // code: the device dropdown, the second getUserMedia call and the mixing.
+  // The script also notes when the AudioContext that mixes the inputs runs.
   // A string, as it runs in the page, where the DOM types live.
   await page.addInitScript(`(() => {
     const devices = navigator.mediaDevices
@@ -110,19 +112,34 @@ test('Firefox on Linux mixes a second input device in as system audio', async ({
       window.e2eMonitorOpened = true
       return getUserMedia({ audio: true })
     }
+    const createDestination = AudioContext.prototype.createMediaStreamDestination
+    AudioContext.prototype.createMediaStreamDestination = function () {
+      const note = () => { if (this.state === 'running') window.e2eMixRunning = true }
+      this.addEventListener('statechange', note)
+      note()
+      return createDestination.call(this)
+    }
   })()`)
 
   await openRecorder(page)
+  test.skip(
+    (await expectedSystemAudioSupport(page, browserName)) !== 'dual-device',
+    'the app offers the dual-device mode only in Firefox on Linux',
+  )
   await page.locator('[data-help="record-source-system"]').click()
   // The only other input is picked automatically.
   await expect(page.locator('output').filter({ hasText: 'Monitor of e2e output' })).toBeVisible()
 
-  const file = await recordAndUpload(page)
+  // The mixing AudioContext starts running a moment after the recording, and
+  // only with an audio output (CI gives Firefox a PulseAudio null sink, see
+  // .github/workflows/e2e-tests.yaml); until then the mix is silence.
+  const file = await recordAndUpload(page, () =>
+    expect
+      .poll(() => page.evaluate('window.e2eMixRunning'), { message: 'Firefox runs the AudioContext that mixes the inputs' })
+      .toBe(true),
+  )
   expect(file.original_filename).toMatch(/\.webm$/)
   expect(await page.evaluate('window.e2eMonitorOpened')).toBe(true)
-  // The two inputs are mixed in an AudioContext, which Firefox does not run
-  // without an audio output: the recording then holds only silence. CI gives
-  // Firefox a PulseAudio null sink for this (.github/workflows/e2e-tests.yaml).
   expect(await recordedPeakDb(page, file.id)).toBeGreaterThan(-50)
   await page.locator('[data-help="transcribe-start"]').click()
   await expect(page.locator('table tbody tr')).toHaveCount(4, { timeout: 20_000 })
