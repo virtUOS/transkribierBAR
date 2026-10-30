@@ -97,7 +97,11 @@ def _ollama(lines):
     @asynccontextmanager
     async def fake_stream(self, method, url, **kwargs):
         seen["method"], seen["url"], seen["json"] = method, url, kwargs["json"]
-        yield Resp()
+        seen["exited"] = False
+        try:
+            yield Resp()
+        finally:
+            seen["exited"] = True
 
     return fake_stream, seen
 
@@ -139,3 +143,27 @@ async def test_ollama_stream_length_raises():
             async for t in provider.stream_chat(MESSAGES, "support", 1500):
                 got.append(t)
     assert "".join(got) == "Hallo"
+
+
+@pytest.mark.asyncio
+async def test_openai_stream_early_close_closes_upstream():
+    provider, _, stream = _openai([_chunk("Hal"), _chunk("lo"), _chunk("!")])
+    gen = provider.stream_chat(MESSAGES, "support", 1500)
+    with patch("app.services.llm.openai.track_llm_tokens"):
+        assert await gen.__anext__() == "Hal"
+        stream.close.assert_not_awaited()
+        await gen.aclose()
+    stream.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_ollama_stream_early_close_closes_upstream():
+    fake, seen = _ollama(_ndjson("stop"))
+    provider = OllamaProvider()
+    gen = provider.stream_chat(MESSAGES, "support", 1500)
+    with patch("httpx.AsyncClient.stream", fake), \
+            patch("app.services.llm.ollama.track_llm_tokens"):
+        assert await gen.__anext__() == "Hal"
+        assert seen["exited"] is False
+        await gen.aclose()
+    assert seen["exited"] is True
