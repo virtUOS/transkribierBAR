@@ -13,7 +13,7 @@ Die Einstellungen erscheinen bei **Hochladen**, sobald Sie eine Datei gewählt h
 
 Die Gruppe **Transkription** enthält zwei Felder.
 
-**Sprache für die Transkription:** Voreingestellt ist **Automatisch erkennen**; dann bestimmt die Spracherkennung die Sprache selbst. Kennen Sie die Sprache, wählen Sie sie aus der Liste. Oben stehen Deutsch, Englisch, Spanisch, Französisch und Türkisch, darunter nach einem Trennstrich alle weiteren Sprachen in alphabetischer Reihenfolge.
+**Sprache für die Transkription:** Voreingestellt ist **Automatisch erkennen**; dann bestimmt die Spracherkennung die Sprache selbst. Kennen Sie die Sprache, wählen Sie sie aus der Liste. Oben stehen Deutsch, Englisch, Spanisch, Französisch und Türkisch, darunter nach einem Trennstrich alle weiteren Sprachen in alphabetischer Reihenfolge. Die Spracherkennung bestimmt die Sprache anhand der ersten 30 Sekunden der Aufnahme; enthalten diese Musik, Stille oder eine andere Sprache, kann sie falsch liegen. Bei **Automatisch erkennen** zeigt die Detailansicht die erkannte Sprache unter dem Titel.
 
 **Qualität:** Die Liste bietet die konfigurierten Modelle an, jeweils mit einer kurzen Beschreibung und dem Namen, zum Beispiel **Ausgewogen (large-v3-turbo)** und **Beste Qualität (large-v3)**. Voreingestellt ist {{default_model}}. **Beste Qualität** ist das vollständige Modell und braucht deutlich länger; **Ausgewogen** ist das kleinere, schnellere Modell. Bietet Ihre Installation nur ein Modell an, heißt das Feld **Modell**, ist schreibgeschützt und zeigt es an.
 
@@ -33,6 +33,8 @@ Mit **Erweiterte Optionen** blenden Sie zwei weitere Felder ein. Beide sind opti
 - **Schlüsselwörter:** kommagetrennte Fachbegriffe.
 
 Beide Angaben gehen an die Spracherkennung. Leere Felder werden nicht übermittelt.
+
+Die beiden Felder teilen sich einen begrenzten Platz, weil die Spracherkennung beide jedem Abschnitt der Aufnahme voranstellt. Unter den Feldern sehen Sie, wie viel von diesem Platz sie belegen. Sind sie zusammen zu lang, weist ein roter Hinweis darauf hin, und sowohl die Schaltfläche, die die Transkription startet, als auch **Als Voreinstellung speichern** bleiben gesperrt, bis Sie sie kürzen. Der Hinweis erscheint auch bei geschlossenen erweiterten Optionen, zum Beispiel nachdem Sie eine Voreinstellung mit langen Angaben gewählt haben.
 
 ## Voreinstellungen
 

@@ -16,7 +16,7 @@ from app.models import (
     ChapterHint,
 )
 from app.database import get_db
-from app.router_helpers import resolve_whisper_model
+from app.router_helpers import prompt_too_long_response, resolve_whisper_model
 
 router = APIRouter()
 
@@ -100,6 +100,8 @@ async def list_transcription_presets(user: UserInfo = Depends(get_current_user))
 @router.post("/api/presets/transcription", response_model=TranscriptionPresetResponse, status_code=201)
 async def create_transcription_preset(body: TranscriptionPresetCreate, user: UserInfo = Depends(get_current_user)):
     model = resolve_whisper_model(body.model)
+    if too_long := await prompt_too_long_response(body.initial_prompt, body.hotwords):
+        return too_long
     preset_id = str(uuid.uuid4())
     async with get_db() as db:
         await db.execute(
@@ -131,6 +133,8 @@ async def get_transcription_preset(preset_id: str, user: UserInfo = Depends(get_
 @router.put("/api/presets/transcription/{preset_id}", response_model=TranscriptionPresetResponse)
 async def update_transcription_preset(preset_id: str, body: TranscriptionPresetCreate, user: UserInfo = Depends(get_current_user)):
     model = resolve_whisper_model(body.model)
+    if too_long := await prompt_too_long_response(body.initial_prompt, body.hotwords):
+        return too_long
     async with get_db() as db:
         cursor = await db.execute(
             "SELECT id FROM transcription_presets WHERE id = ? AND user_id = ?",

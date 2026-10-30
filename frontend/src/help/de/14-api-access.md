@@ -74,11 +74,13 @@ Die Antwort enthält die `id` der Transkription (`TRANSCRIPTION_ID`) und den Sta
 | `file_id` | Pflicht. Die `id` aus dem Upload. |
 | `language` | Sprachcode wie `de`. Ohne dieses Feld wird die Sprache automatisch erkannt. |
 | `model` | Das Modell. Siehe den Hinweis unten. |
-| `min_speakers`, `max_speakers` | Mindest- und Höchstzahl der Sprechenden. Ist mindestens eines davon größer als 0, werden Sprechende erkannt. Fehlen beide oder sind sie 0, werden keine Sprechenden erkannt. |
+| `min_speakers`, `max_speakers` | Mindest- und Höchstzahl der Sprechenden. Ist mindestens eines davon größer als 0, werden Sprechende erkannt. Fehlen beide oder sind sie 0, werden keine Sprechenden erkannt. Negative Werte oder eine Höchstzahl (außer 0) unter der Mindestzahl werden abgelehnt. |
 | `initial_prompt` | Optionaler Kontext für die Transkription. |
 | `hotwords` | Optionale Fachbegriffe, durch Kommas getrennt. |
 
 > **Das Modell.** `model` nennt eines der Modelle, die diese Installation anbietet; das Feld **Qualität** bei **Hochladen** führt sie mit ihren Namen in Klammern auf. Lassen Sie `model` weg, wird das Standardmodell {{default_model}} dieser Installation verwendet. Ein Modell, das diese Installation nicht anbietet, wird mit Status 422 abgelehnt; die Meldung nennt das abgelehnte Modell.
+
+> **Anfangs-Prompt und Schlüsselwörter.** Zusammen dürfen sie höchstens 223 Tokens aus dem Vokabular der Spracherkennung belegen, grob 650 bis 850 Zeichen deutschen Text und weniger in Schriften wie Chinesisch oder Arabisch. Längere Angaben werden mit Status 422 und `"code": "prompt_too_long"` abgelehnt; die Meldung nennt die Zahl der Tokens. Beim Speichern einer Transkriptions-Voreinstellung gilt dieselbe Prüfung. `POST /api/prompt-budget` mit den Feldern `initial_prompt` und `hotwords` antwortet mit `tokens` und `limit` und startet nichts.
 
 **3. Auf das Ergebnis warten.** Fragen Sie den Status ab, bis er `completed` oder `failed` ist:
 
@@ -96,7 +98,7 @@ Statt die Abfrage zu wiederholen, können Sie den WebSocket aus dem Abschnitt �
 curl -H "Authorization: Bearer tw_…" https://transcription.uni-osnabrueck.de/api/transcription/TRANSCRIPTION_ID
 ```
 
-Die Antwort enthält die Äußerungen (`utterances`, jeweils mit `start` und `end` in Millisekunden, `text` und `speaker`), den gesamten Text (`text`), die Sprache (`language`) und die Namen der Sprechenden (`speaker_mappings`). Für eine fertige Datei hängen Sie stattdessen `/export/txt`, `/export/srt`, `/export/vtt` oder `/export/json` an die Adresse an.
+Die Antwort enthält die Äußerungen (`utterances`, jeweils mit `start` und `end` in Millisekunden, `text` und `speaker`), den gesamten Text (`text`), die angeforderte Sprache (`language`, `null` bei automatischer Erkennung), die von der Spracherkennung gemeldete Sprache (`detected_language`, `null`, wenn keine gespeichert ist) und die Namen der Sprechenden (`speaker_mappings`). Für eine fertige Datei hängen Sie stattdessen `/export/txt`, `/export/srt`, `/export/vtt` oder `/export/json` an die Adresse an.
 
 ## Grenzen
 

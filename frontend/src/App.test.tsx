@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import i18n from './i18n'
 import { useStore } from './store'
-import { api } from './api/client'
+import { api, ApiError } from './api/client'
 import App from './App'
-import type { ConfigResponse, PresetBundle, PresetBundleExpanded, TranscriptionPreset } from './api/types'
+import type { ConfigResponse, PresetBundle, PresetBundleExpanded, TranscriptionListItem, TranscriptionPreset } from './api/types'
 
 vi.mock('./api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api/client')>()
@@ -17,6 +17,11 @@ vi.mock('./api/client', async (importOriginal) => {
       getRefinementPresets: vi.fn(),
       getBundles: vi.fn(),
       getDefaultBundle: vi.fn(),
+      promptBudget: vi.fn(),
+      startTranscription: vi.fn(),
+      getStatus: vi.fn(),
+      connectWebSocket: vi.fn(() => ({ close: vi.fn() })),
+      listTranscriptions: vi.fn(() => Promise.resolve([])),
     },
   }
 })
@@ -144,5 +149,99 @@ describe('Upload settings and the default bundle', () => {
     expect(select.value).toBe('B')
     expect(screen.getByLabelText('Transcription language')).toHaveValue('fr')
     expect(screen.getByLabelText('Detect speakers')).toBeChecked()
+  })
+})
+
+describe('Upload settings and the prompt budget', () => {
+  async function typePrompt(text: string) {
+    fireEvent.click(await screen.findByRole('button', { name: /Advanced options/ }))
+    fireEvent.change(screen.getByPlaceholderText('Optional context for the transcription'), { target: { value: text } })
+  }
+
+  it('blocks Transcribe while the initial prompt and hotwords are too long', async () => {
+    serve([])
+    vi.mocked(api.promptBudget).mockResolvedValue({ tokens: 300, limit: 223 })
+    render(<App />)
+    await typePrompt('A very long prompt')
+
+    expect(await screen.findByText(/together are too long \(135% of the available space\)/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Transcribe' })).toBeDisabled()
+  })
+
+  it('names the cause when the server rejects them as too long', async () => {
+    serve([])
+    vi.mocked(api.promptBudget).mockResolvedValue({ tokens: 100, limit: 223 })
+    vi.mocked(api.startTranscription).mockRejectedValue(
+      new ApiError(422, 'Initial prompt and hotwords together are too long (224 of 223 tokens).', 'prompt_too_long'),
+    )
+    render(<App />)
+    await typePrompt('A prompt')
+    await screen.findByText(/use 45% of the available space/)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Transcribe' }))
+
+    expect(await screen.findByText('Initial prompt and hotwords together are too long. Please shorten them.')).toBeInTheDocument()
+  })
+})
+
+describe('A failed transcription opened from the overview', () => {
+  const failedItem: TranscriptionListItem = {
+    id: 't1', file_id: 'f1', original_filename: 'talk.mp3', status: 'failed', language: null, model: 'base',
+    created_at: '2026-10-30T08:00:00Z', file_size: 1, expires_at: '2026-11-02T08:00:00Z', archived: false,
+    title: 'Old title', has_video: false,
+  }
+
+  it('offers Try again, which returns to the settings for the same file', async () => {
+    serve([])
+    vi.mocked(api.promptBudget).mockResolvedValue({ tokens: 0, limit: 223 })
+    vi.mocked(api.getStatus).mockResolvedValue({
+      id: 't1', status: 'failed', progress: null, error: 'ASR job exceeded 1800s', error_code: 'timeout',
+    })
+    useStore.setState({
+      currentView: 'detail',
+      transcriptionId: 't1',
+      transcriptionStatus: 'failed',
+      transcriptionTitle: 'Old title',
+      transcriptionHistory: [failedItem],
+    })
+    render(<App />)
+
+    expect(await screen.findByText(
+      'Error message: The speech recognition did not finish this transcription within the time limit.',
+    )).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+
+    const transcribe = await screen.findByRole('button', { name: 'Transcribe' })
+    const state = useStore.getState()
+    expect(state.currentView).toBe('upload')
+    expect(state.transcriptionId).toBeNull()
+    expect(state.transcriptionStatus).toBeNull()
+    expect(state.transcriptionTitle).toBeNull()
+    expect(state.file?.id).toBe('f1')
+    expect(screen.getByText('talk.mp3')).toBeInTheDocument()
+
+    // The same file is transcribed again, without a new upload.
+    await waitFor(() => expect(transcribe).toBeEnabled())
+    vi.mocked(api.startTranscription).mockResolvedValue({ id: 't2', status: 'pending' })
+    fireEvent.click(transcribe)
+    await waitFor(() => expect(api.startTranscription).toHaveBeenCalledWith(expect.objectContaining({ file_id: 'f1' })))
+  })
+
+  it('goes to the overview, not an empty page, on Back after Try again', async () => {
+    serve([])
+    vi.mocked(api.promptBudget).mockResolvedValue({ tokens: 0, limit: 223 })
+    vi.mocked(api.getStatus).mockResolvedValue({
+      id: 't1', status: 'failed', progress: null, error: 'x', error_code: 'timeout',
+    })
+    useStore.setState({
+      currentView: 'detail', transcriptionId: 't1', transcriptionStatus: 'failed', transcriptionHistory: [failedItem],
+    })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+    await screen.findByRole('button', { name: 'Transcribe' })
+
+    act(() => { window.dispatchEvent(new PopStateEvent('popstate', { state: { view: 'detail' } })) })
+
+    expect(useStore.getState().currentView).toBe('archive')
   })
 })

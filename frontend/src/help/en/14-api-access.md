@@ -74,11 +74,13 @@ The answer contains the `id` of the transcription (`TRANSCRIPTION_ID`) and the s
 | `file_id` | Required. The `id` from the upload. |
 | `language` | Language code such as `de`. Without this field, the language is detected automatically. |
 | `model` | The model. See the note below. |
-| `min_speakers`, `max_speakers` | Minimum and maximum number of speakers. If at least one of them is greater than 0, speakers are detected. If both are missing or 0, speakers are not detected. |
+| `min_speakers`, `max_speakers` | Minimum and maximum number of speakers. If at least one of them is greater than 0, speakers are detected. If both are missing or 0, speakers are not detected. Negative values, or a maximum other than 0 below the minimum, are rejected. |
 | `initial_prompt` | Optional context for the transcription. |
 | `hotwords` | Optional technical terms, separated by commas. |
 
 > **The model.** `model` names one of the models this installation offers; the **Quality** field in **Upload** lists them with their names in parentheses. If you leave out `model`, the installation's default model {{default_model}} is used. A model this installation does not offer is rejected with status 422, and the message names the rejected model.
+
+> **Initial prompt and hotwords.** Together they may take at most 223 tokens of the speech recognition's vocabulary, roughly 650 to 850 characters of German text and fewer in scripts such as Chinese or Arabic. Longer entries are rejected with status 422 and `"code": "prompt_too_long"`; the message names the number of tokens. Saving a transcription preset checks the same. `POST /api/prompt-budget` with the fields `initial_prompt` and `hotwords` answers with `tokens` and `limit` and starts nothing.
 
 **3. Wait for the result.** Query the status until it is `completed` or `failed`:
 
@@ -96,7 +98,7 @@ Instead of repeating the query, you can listen on the WebSocket from the section
 curl -H "Authorization: Bearer tw_…" https://transcription.uni-osnabrueck.de/api/transcription/TRANSCRIPTION_ID
 ```
 
-The answer contains the utterances (`utterances`, each with `start` and `end` in milliseconds, `text` and `speaker`), the complete text (`text`), the language (`language`) and the speaker names (`speaker_mappings`). For a ready-made file, append `/export/txt`, `/export/srt`, `/export/vtt` or `/export/json` to the address instead.
+The answer contains the utterances (`utterances`, each with `start` and `end` in milliseconds, `text` and `speaker`), the complete text (`text`), the requested language (`language`, `null` for automatic detection), the language the speech recognition reported (`detected_language`, `null` if none was recorded) and the speaker names (`speaker_mappings`). For a ready-made file, append `/export/txt`, `/export/srt`, `/export/vtt` or `/export/json` to the address instead.
 
 ## Limits
 

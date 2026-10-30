@@ -1,5 +1,7 @@
 import { create } from 'zustand'
-import type { FileInfo, TranscriptionResult, TranscriptionListItem, ConfigResponse, Utterance, RefinementMetadata, AnalysisListItem, TranscriptionPreset, AnalysisPreset, RefinementPreset, PresetBundle, UtteranceSource } from '../api/types'
+import i18n from '../i18n'
+import { ApiError, AssistantStreamError, streamAssistantChat } from '../api/client'
+import type { FileInfo, TranscriptionResult, TranscriptionListItem, ConfigResponse, Utterance, RefinementMetadata, AnalysisListItem, TranscriptionPreset, AnalysisPreset, RefinementPreset, PresetBundle, UtteranceSource, AssistantMessage } from '../api/types'
 
 export type LeaveReason = 'upload' | 'recording' | 'unsavedEdits'
 
@@ -78,6 +80,14 @@ interface AppState {
   helpInitialSection: string | null
   setHelpOpen: (open: boolean, initialSection?: string | null) => void
   closeHelp: () => void
+  helpTab: 'manual' | 'assistant'
+  setHelpTab: (tab: 'manual' | 'assistant') => void
+  assistantMessages: AssistantMessage[]
+  assistantStatus: 'idle' | 'streaming'
+  assistantError: string | null
+  sendAssistantMessage: (text: string) => Promise<void>
+  retryAssistant: () => Promise<void>
+  resetAssistant: () => void
   clearRefinement: () => void
   clearTranscriptionState: () => void
   reset: () => void
@@ -104,13 +114,96 @@ const clearedTranscriptionState = {
   analyses: [],
 }
 
+const ASSISTANT_MESSAGE_MAX = 8000
+
+/** Newest messages that fit the endpoint's limits; never starts with an assistant message. */
+export function trimHistory(messages: AssistantMessage[], maxMessages = 20, maxChars = 48000): AssistantMessage[] {
+  const clamped = messages.map((m) =>
+    m.role === 'assistant' && m.content.length > ASSISTANT_MESSAGE_MAX ? { ...m, content: m.content.slice(0, ASSISTANT_MESSAGE_MAX) } : m,
+  )
+  let start = Math.max(0, clamped.length - maxMessages)
+  const total = (from: number) => clamped.slice(from).reduce((n, m) => n + m.content.length, 0)
+  while (start < clamped.length && (total(start) > maxChars || clamped[start].role === 'assistant')) start++
+  return clamped.slice(start)
+}
+
+let assistantAbort: AbortController | null = null
+
 let isPopStateNavigation = false
 
 export function setPopStateFlag(value: boolean) {
   isPopStateNavigation = value
 }
 
-export const useStore = create<AppState>((set, get) => ({
+const clearedAssistantState = {
+  assistantMessages: [] as AssistantMessage[],
+  assistantStatus: 'idle' as const,
+  assistantError: null as string | null,
+}
+
+function assistantErrorCode(err: unknown): string {
+  if (err instanceof AssistantStreamError) return err.code
+  if (err instanceof ApiError) return err.code === 'assistant_busy' ? 'assistant_busy' : 'server_error'
+  return 'network'
+}
+
+export const useStore = create<AppState>((set, get) => {
+  // Streams an answer for the current history (which ends with a user message).
+  const runAssistant = async () => {
+    const controller = new AbortController()
+    assistantAbort = controller
+    const { currentView, transcriptionId } = get()
+    set((s) => ({
+      assistantMessages: [...s.assistantMessages, { role: 'assistant', content: '' }],
+      assistantStatus: 'streaming',
+      assistantError: null,
+    }))
+    const history = get().assistantMessages.slice(0, -1)
+    try {
+      await streamAssistantChat(
+        {
+          messages: trimHistory(history),
+          lang: i18n.language === 'en' ? 'en' : 'de',
+          view: currentView,
+          transcription_id: currentView === 'detail' ? transcriptionId : null,
+        },
+        {
+          signal: controller.signal,
+          onDelta: (text) => {
+            if (assistantAbort !== controller) return
+            set((s) => {
+              const msgs = s.assistantMessages.slice()
+              const last = msgs[msgs.length - 1]
+              msgs[msgs.length - 1] = { ...last, content: last.content + text }
+              return { assistantMessages: msgs }
+            })
+          },
+        },
+      )
+      if (assistantAbort === controller) {
+        const msgs = get().assistantMessages
+        const last = msgs[msgs.length - 1]
+        if (last && last.role === 'assistant' && last.content === '') {
+          set({ assistantMessages: msgs.slice(0, -1), assistantStatus: 'idle', assistantError: 'incomplete' })
+        } else {
+          set({ assistantStatus: 'idle' })
+        }
+      }
+    } catch (err) {
+      if (assistantAbort !== controller) return // reset while streaming
+      const msgs = get().assistantMessages
+      const last = msgs[msgs.length - 1]
+      set({
+        assistantMessages: last && last.role === 'assistant' && last.content === '' ? msgs.slice(0, -1) : msgs,
+        assistantStatus: 'idle',
+        assistantError: assistantErrorCode(err),
+      })
+    } finally {
+      if (assistantAbort === controller) assistantAbort = null
+    }
+  }
+
+  return {
   currentView: 'archive' as const,
   setCurrentView: (view) => {
     const current = useStore.getState().currentView
@@ -223,17 +316,45 @@ export const useStore = create<AppState>((set, get) => ({
   helpOpen: false,
   helpInitialSection: null,
   setHelpOpen: (open, initialSection) =>
-    set({ helpOpen: open, helpInitialSection: initialSection ?? null }),
+    set({
+      helpOpen: open,
+      helpInitialSection: initialSection ?? null,
+      ...(initialSection ? { helpTab: 'manual' as const } : {}),
+    }),
   closeHelp: () => set({ helpOpen: false }),
+  helpTab: 'manual' as const,
+  setHelpTab: (tab) => set({ helpTab: tab }),
+  ...clearedAssistantState,
+  sendAssistantMessage: async (text) => {
+    if (get().assistantStatus === 'streaming') return
+    set((s) => ({ assistantMessages: [...s.assistantMessages, { role: 'user', content: text }] }))
+    await runAssistant()
+  },
+  retryAssistant: async () => {
+    if (get().assistantStatus === 'streaming') return
+    const msgs = get().assistantMessages
+    const last = msgs[msgs.length - 1]
+    if (last?.role === 'assistant') set({ assistantMessages: msgs.slice(0, -1) })
+    if (get().assistantMessages.length === 0) return
+    await runAssistant()
+  },
+  resetAssistant: () => {
+    assistantAbort?.abort()
+    assistantAbort = null
+    set(clearedAssistantState)
+  },
   clearRefinement: () => set({ refinedUtterances: null, refinementMetadata: null, refinementStale: false, activeView: 'original' as const }),
   clearTranscriptionState: () => set(clearedTranscriptionState),
-  reset: () => set({
+  reset: () => {
+    set({
     ...clearedTranscriptionState,
     currentView: 'archive' as const,
     file: null, uploading: false, uploadAbortController: null, recordingActive: false,
     transcriptionId: null, transcriptionTitle: null, transcriptionStatus: null,
-  }),
-}))
+    })
+  },
+  }
+})
 
 // Set initial browser history state
 history.replaceState({ view: 'archive' }, '', '')

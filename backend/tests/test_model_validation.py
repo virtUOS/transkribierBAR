@@ -96,3 +96,34 @@ async def test_preset_without_model_uses_the_instance_default(instance_models, p
         resp = await client.post("/api/presets/transcription", json={"name": "no model"})
     assert resp.status_code == 201
     assert resp.json()["model"] == "tiny"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bounds", [
+    {"min_speakers": -1}, {"max_speakers": -2}, {"min_speakers": 3, "max_speakers": 2},
+])
+async def test_invalid_speaker_bounds_are_rejected(instance_models, mock_asr, bounds):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await _transcribe(client, mock_asr, model="tiny", **bounds)
+    assert resp.status_code == 422
+    mock_asr.submit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_min_speakers_alone_is_accepted(instance_models, mock_asr):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await _transcribe(client, mock_asr, model="tiny", min_speakers=2, max_speakers=0)
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fields", [{}, {"language": None}, {"language": "auto"}])
+async def test_auto_detect_is_stored_as_no_language(instance_models, mock_asr, fields):
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await _transcribe(client, mock_asr, **fields)
+    assert resp.status_code == 200
+    async with get_db() as db:
+        row = await (await db.execute(
+            "SELECT language FROM transcriptions WHERE id = ?", (resp.json()["id"],),
+        )).fetchone()
+    assert row["language"] is None

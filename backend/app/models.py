@@ -33,6 +33,31 @@ class TranscriptionSettings(BaseModel):
     initial_prompt: str | None = None
     hotwords: str | None = None
 
+    # The ASR backends take "auto" as Auto-detect; stored, it is NULL like a
+    # missing language, so `transcriptions.language` has one value for it.
+    @field_validator("language")
+    @classmethod
+    def _auto_is_no_language(cls, v: str | None) -> str | None:
+        return None if v == "auto" else v
+
+    @model_validator(mode="after")
+    def _check_speaker_bounds(self) -> "TranscriptionSettings":
+        if self.min_speakers < 0 or self.max_speakers < 0:
+            raise ValueError("min_speakers and max_speakers must be 0 or greater")
+        if self.min_speakers > 0 and self.max_speakers > 0 and self.max_speakers < self.min_speakers:
+            raise ValueError("max_speakers must not be lower than min_speakers")
+        return self
+
+
+class PromptBudgetRequest(BaseModel):
+    initial_prompt: str | None = None
+    hotwords: str | None = None
+
+
+class PromptBudget(BaseModel):
+    tokens: int
+    limit: int
+
 
 class TranscriptionStatus(BaseModel):
     id: str
@@ -255,6 +280,7 @@ class ConfigResponse(BaseModel):
     default_expiry_hours: int = 72
     archive_expiry_hours: int = 4320
     privacy_notice: bool = False
+    support_assistant_enabled: bool = False
 
 
 # --- Invitations ---

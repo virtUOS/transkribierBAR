@@ -38,7 +38,10 @@ export interface TranscriptionResult {
   status: string
   utterances: Utterance[]
   text: string
+  /** The requested language; null means Auto-detect. */
   language: string | null
+  /** The language the speech recognition reported; missing or null for older transcriptions. */
+  detected_language?: string | null
   speaker_mappings: Record<string, string>
   summary: SummaryResult | null
   protocol: ProtocolResult | null
@@ -149,6 +152,7 @@ export interface ConfigResponse {
   popular_languages: string[]
   enabled_languages: string[]
   api_tokens_enabled?: boolean
+  support_assistant_enabled?: boolean
   api_token_default_expiry_days?: number
   contact_email?: string
   is_admin?: boolean
@@ -211,6 +215,12 @@ export interface TranscriptionPreset {
   hotwords: string | null
   created_at: string | null
   updated_at: string | null
+}
+
+/** Tokens the initial prompt and hotwords take together, and how many Whisper allows. */
+export interface PromptBudget {
+  tokens: number
+  limit: number
 }
 
 export interface TranscriptionPresetCreate {
@@ -325,4 +335,16 @@ export interface InvitationCreateRequest {
 
 export interface InvitationAcceptResponse {
   redirect_url: string
+}
+
+export interface AssistantMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export interface AssistantChatRequest {
+  messages: AssistantMessage[]
+  lang: 'de' | 'en'
+  view: 'archive' | 'upload' | 'record' | 'detail' | 'presets' | 'settings'
+  transcription_id?: string | null
 }

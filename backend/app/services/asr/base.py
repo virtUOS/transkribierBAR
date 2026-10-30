@@ -11,13 +11,16 @@ asr_semaphore = asyncio.Semaphore(settings.ASR_MAX_CONCURRENT)
 
 
 class TranscriptionSettings:
-    def __init__(self, language=None, model="base", min_speakers=0, max_speakers=0, initial_prompt=None, hotwords=None):
+    def __init__(self, language=None, model="base", min_speakers=0, max_speakers=0, initial_prompt=None, hotwords=None,
+                 job_timeout=None, request_id=None):
         self.language = language
         self.model = model
         self.min_speakers = min_speakers
         self.max_speakers = max_speakers
         self.initial_prompt = initial_prompt
         self.hotwords = hotwords
+        self.job_timeout = job_timeout
+        self.request_id = request_id
 
 
 class ASRBackend(ABC):

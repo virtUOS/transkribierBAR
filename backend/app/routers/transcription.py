@@ -7,13 +7,16 @@ import uuid
 from datetime import datetime, timedelta, timezone
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.concurrency import run_in_threadpool
 from app.config import settings
 from app.dependencies import get_current_user
-from app.router_helpers import ensure_transcription_owned, load_speaker_mappings, resolve_whisper_model
+from app.router_helpers import (
+    ensure_transcription_owned, load_speaker_mappings, prompt_too_long_response, resolve_whisper_model,
+)
 from app.models import (
     UserInfo, TranscriptionSettings as TranscriptionSettingsModel,
     TranscriptionStatus, TranscriptionListItem, Utterance, SpeakerMappingRequest,
-    TitleRequest, TranscriptionUpdateRequest,
+    TitleRequest, TranscriptionUpdateRequest, PromptBudgetRequest, PromptBudget,
 )
 from app.database import get_db
 from app.services.asr import get_asr_backend
@@ -21,6 +24,7 @@ from app.services.api_tokens import resolve_token
 from app.services.asr.base import TranscriptionSettings, asr_semaphore
 from app.services.audio import ensure_clean_asr_copy, get_media_duration
 from app.services.formats import generate_srt, generate_vtt, generate_txt
+from app.services.prompt_budget import PROMPT_TOKEN_LIMIT, prompt_tokens
 from app.metrics import (
     inc, observe, gauge_inc, gauge_dec,
     transcriptions_total, transcription_duration_seconds, active_transcriptions,
@@ -37,12 +41,21 @@ from app.metrics import (
 router = APIRouter()
 
 
+@router.post("/api/prompt-budget", response_model=PromptBudget)
+async def get_prompt_budget(req: PromptBudgetRequest, user: UserInfo = Depends(get_current_user)):
+    """How many tokens the initial prompt and hotwords take together, and the limit."""
+    tokens = await run_in_threadpool(prompt_tokens, req.initial_prompt, req.hotwords)
+    return PromptBudget(tokens=tokens, limit=PROMPT_TOKEN_LIMIT)
+
+
 @router.post("/api/transcribe")
 async def start_transcription(
     req: TranscriptionSettingsModel,
     user: UserInfo = Depends(get_current_user),
 ):
     req.model = resolve_whisper_model(req.model)
+    if too_long := await prompt_too_long_response(req.initial_prompt, req.hotwords):
+        return too_long
     async with get_db() as db:
         cursor = await db.execute(
             "SELECT id, file_path, mp3_path FROM files WHERE id = ? AND user_id = ?",
@@ -158,6 +171,7 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
         language=req.language, model=req.model,
         min_speakers=req.min_speakers, max_speakers=req.max_speakers,
         initial_prompt=req.initial_prompt, hotwords=req.hotwords,
+        request_id=transcription_id,
     )
 
     gauge_dec(transcription_queue_depth)
@@ -169,6 +183,7 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
         audio_duration = await asyncio.wait_for(get_media_duration(file_path), timeout=5)
     except (asyncio.TimeoutError, Exception):
         audio_duration = None
+    ts.job_timeout = _job_timeout_for(audio_duration)
     if audio_duration is not None:
         observe(transcription_audio_duration_seconds, audio_duration, backend_name)
 
@@ -208,8 +223,8 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
         async with get_db() as db:
             cursor = await db.execute(
                 """UPDATE transcriptions SET status = ?, result_json = ?, original_result_json = ?,
-                   completed_at = ? WHERE id = ?""",
-                ("completed", result_json, result_json,
+                   detected_language = ?, completed_at = ? WHERE id = ?""",
+                ("completed", result_json, result_json, result.language,
                  datetime.now(timezone.utc).isoformat(), transcription_id),
             )
             await db.commit()
@@ -323,6 +338,7 @@ async def get_transcription(transcription_id: str, user: UserInfo = Depends(get_
         "utterances": [u.model_dump() for u in utterances],
         "text": " ".join(u.text for u in utterances),
         "language": row["language"],
+        "detected_language": row["detected_language"],
         "speaker_mappings": speaker_mappings,
         "edited": _differs_from_original(row["result_json"], row["original_result_json"]),
     }

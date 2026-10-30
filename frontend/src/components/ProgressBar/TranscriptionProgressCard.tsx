@@ -16,12 +16,15 @@ interface TranscriptionProgressCardProps {
   pendingTranscription?: boolean
   submitError?: string | null
   onTryAgain?: () => void
+  /** The language was set to Auto-detect; a failure the speech recognition reported then suggests choosing it. */
+  autoLanguage?: boolean
 }
 
 export function TranscriptionProgressCard({
   pendingTranscription = false,
   submitError = null,
   onTryAgain,
+  autoLanguage = false,
 }: TranscriptionProgressCardProps) {
   const { t } = useTranslation()
   const transcriptionId = useStore((s) => s.transcriptionId)
@@ -35,7 +38,20 @@ export function TranscriptionProgressCard({
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const doneRef = useRef(false)
   // Kept as received and translated when rendered, so a language switch applies.
-  const [failure, setFailure] = useState<{ code?: string | null; message?: string | null } | null>(null)
+  // Tagged with its transcription, so another transcription never shows it.
+  const [failureOf, setFailureOf] = useState<{ id: string; code?: string | null; message?: string | null } | null>(null)
+  const failure = failureOf && failureOf.id === transcriptionId ? failureOf : null
+
+  // A transcription opened from the overview is already failed: no socket
+  // reports its reason, so fetch it once.
+  useEffect(() => {
+    if (!transcriptionId || status !== 'failed' || failure) return
+    let cancelled = false
+    api.getStatus(transcriptionId).then((s) => {
+      if (!cancelled && s.status === 'failed') setFailureOf({ id: transcriptionId, code: s.error_code, message: s.error })
+    }).catch(() => { /* the card still says that it failed */ })
+    return () => { cancelled = true }
+  }, [transcriptionId, status, failure])
 
   useEffect(() => {
     if (!transcriptionId || status === 'completed' || status === 'failed') return
@@ -76,7 +92,7 @@ export function TranscriptionProgressCard({
     const handleFailed = (code?: string | null, message?: string | null) => {
       markDone()
       setStatus('failed')
-      setFailure({ code, message })
+      setFailureOf({ id: transcriptionId, code, message })
     }
 
     const connect = () => {
@@ -214,6 +230,9 @@ export function TranscriptionProgressCard({
                 <p className="text-red-400/80 text-xs mt-1 break-words">
                   {t('transcription.failedDetail', { message: errorMessage })}
                 </p>
+              )}
+              {autoLanguage && failure?.code === 'asr_failed' && (
+                <p className="text-red-400/80 text-xs mt-1">{t('transcription.autoLanguageHint')}</p>
               )}
             </div>
           </div>

@@ -9,10 +9,12 @@ import { TranscriptionProgressCard } from './components/ProgressBar'
 import { TranscriptionList } from './components/TranscriptionList'
 import { TabBar } from './components/TabBar'
 import { useStore, setPopStateFlag } from './store'
-import { api } from './api/client'
+import { api, ApiError } from './api/client'
 import { useBeforeUnloadWarning } from './hooks/useBeforeUnloadWarning'
+import { isOverPromptBudget, usePromptBudget } from './hooks/usePromptBudget'
 import { LoadingFallback } from './components/LoadingFallback'
 import { ChunkErrorBoundary } from './components/ChunkErrorBoundary'
+import { DetectedLanguage } from './components/DetectedLanguage'
 import { InviteLanding } from './components/InviteLanding'
 import { resolveModel } from './utils/models'
 import { leaveMessages } from './utils/leaveMessages'
@@ -176,6 +178,7 @@ function MainApp() {
   const transcriptionStatus = useStore((s) => s.transcriptionStatus)
   const transcriptionTitle = useStore((s) => s.transcriptionTitle)
   const transcriptionResult = useStore((s) => s.transcriptionResult)
+  const transcriptionHistory = useStore((s) => s.transcriptionHistory)
   const activeTab = useStore((s) => s.activeTab)
   const helpOpen = useStore((s) => s.helpOpen)
   const [playerCollapsed, setPlayerCollapsed] = useState(false)
@@ -208,6 +211,7 @@ function MainApp() {
   const updateSettings = useCallback((patch: Partial<SettingsPanelValues>) => {
     setSettings((s) => ({ ...s, ...patch }))
   }, [])
+  const promptBudget = usePromptBudget(settings.initialPrompt, settings.hotwords)
 
   const [pendingTranscription, setPendingTranscription] = useState(false)
   const [submittedSummary, setSubmittedSummary] = useState<SubmittedSummary | null>(null)
@@ -266,7 +270,10 @@ function MainApp() {
       }
       setPopStateFlag(true)
       isPopStateNav.current = true
-      setCurrentView(e.state?.view ?? 'archive')
+      const view = e.state?.view ?? 'archive'
+      // A detail entry whose transcription was closed (Try again, a reset)
+      // would show an empty page.
+      setCurrentView(view === 'detail' && !state.transcriptionId ? 'archive' : view)
       setPopStateFlag(false)
     }
     window.addEventListener('popstate', handlePopState)
@@ -461,7 +468,11 @@ function MainApp() {
       useStore.getState().setTranscriptionStatus(result.status)
       setPendingTranscription(false)
     } catch (e) {
-      setSubmitError(e instanceof Error ? e.message : 'Transcription failed')
+      if (e instanceof ApiError && e.code === 'prompt_too_long') {
+        setSubmitError(t('settings.promptBudget.rejected'))
+      } else {
+        setSubmitError(e instanceof Error ? e.message : 'Transcription failed')
+      }
       setPendingTranscription(false)
     } finally {
       setSubmitting(false)
@@ -493,6 +504,16 @@ function MainApp() {
     setSubmittedSummary(null)
   }, [])
 
+  // A failed transcription opened from the overview: to the upload settings for
+  // its file, which is still on the server, to transcribe it again.
+  const handleRetryFailed = useCallback(() => {
+    const state = useStore.getState()
+    state.clearTranscriptionState()
+    state.setTranscriptionTitle(null)
+    handleTryAgain()
+    state.setCurrentView('upload')
+  }, [handleTryAgain])
+
   const inSubmittedState =
     (transcriptionId !== null && transcriptionStatus !== 'completed')
     || pendingTranscription
@@ -510,7 +531,7 @@ function MainApp() {
     return t('transcription.transcribe')
   })()
 
-  const transcribeDisabled = (!file && !uploading) || submitting
+  const transcribeDisabled = (!file && !uploading) || submitting || isOverPromptBudget(promptBudget)
 
   useEffect(() => {
     if (currentView !== 'upload' && currentView !== 'record') {
@@ -571,13 +592,14 @@ function MainApp() {
                 pendingTranscription={pendingTranscription}
                 submitError={submitError}
                 onTryAgain={handleTryAgain}
+                autoLanguage={submittedSummary?.language === null}
               />
             </>
           ) : (
             <>
               <FileUpload />
               {(file || uploading) && !showEditor && (
-                <SettingsPanel values={settings} onChange={updateSettings} />
+                <SettingsPanel values={settings} onChange={updateSettings} promptBudget={promptBudget} />
               )}
               {(file || uploading) && !showEditor && (
                 <TranscribeActionBar
@@ -612,6 +634,7 @@ function MainApp() {
                 pendingTranscription={pendingTranscription}
                 submitError={submitError}
                 onTryAgain={handleTryAgain}
+                autoLanguage={submittedSummary?.language === null}
               />
             </>
           ) : (
@@ -622,7 +645,7 @@ function MainApp() {
                 </Suspense>
               </ChunkErrorBoundary>
               {(file || uploading) && !showEditor && (
-                <SettingsPanel values={settings} onChange={updateSettings} />
+                <SettingsPanel values={settings} onChange={updateSettings} promptBudget={promptBudget} />
               )}
               {(file || uploading) && !showEditor && (
                 <TranscribeActionBar
@@ -658,8 +681,12 @@ function MainApp() {
               )}
             </h1>
           )}
+          <DetectedLanguage requested={transcriptionResult?.language} detected={transcriptionResult?.detected_language} />
           <DetailActions />
-          <TranscriptionProgressCard />
+          <TranscriptionProgressCard
+            onTryAgain={handleRetryFailed}
+            autoLanguage={transcriptionHistory.find((h) => h.id === transcriptionId)?.language === null}
+          />
           {pipelineStatus && (
             <div className={`mx-6 my-2 px-4 py-2 rounded-lg flex items-center gap-3 ${
               pipelineStatus.step === 'refine' ? 'bg-amber-900/30 border border-amber-700/50' :

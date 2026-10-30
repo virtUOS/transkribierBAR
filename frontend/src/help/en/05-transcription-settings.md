@@ -13,7 +13,7 @@ The settings appear in **Upload** once you have chosen a file, and in **Record**
 
 The **Transcription** group has two fields.
 
-**Transcription language:** The default is **Auto-detect**; the speech recognition then determines the language by itself. If you know the language, choose it from the list. German, English, Spanish, French and Turkish are at the top, followed by a divider and all other languages in alphabetical order.
+**Transcription language:** The default is **Auto-detect**; the speech recognition then determines the language by itself. If you know the language, choose it from the list. German, English, Spanish, French and Turkish are at the top, followed by a divider and all other languages in alphabetical order. The speech recognition determines the language from the first 30 seconds of the recording; if those contain music, silence or another language, it can guess wrong. With **Auto-detect**, the detail view shows the detected language below the title.
 
 **Quality:** The list offers the configured models, each with a short description and its name, for example **Balanced (large-v3-turbo)** and **Best quality (large-v3)**. The default is {{default_model}}. **Best quality** is the full model and takes noticeably longer; **Balanced** is the smaller, faster model. If your installation offers only one model, the field is named **Model**, is read-only and shows it.
 
@@ -33,6 +33,8 @@ You give names to the detected people after the transcription, in the **Subtitle
 - **Hotwords:** comma-separated technical terms.
 
 Both entries go to the speech recognition. Empty fields are not sent.
+
+The two fields share a limited space, because the speech recognition puts both in front of every section of the recording. Below the fields you see how much of that space they use. If they are too long together, a note says so in red, and both the button that starts the transcription and **Save as preset** stay disabled until you shorten them. The note also appears while the advanced options are closed, for example after you have chosen a preset with long entries.
 
 ## Presets
 

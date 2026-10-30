@@ -180,6 +180,9 @@ MIGRATIONS = [
     # The first stored result; restored by the editor's Restore original.
     # Written only on completion and by the backfill in init_db.
     ("original_result_json", "transcriptions", "original_result_json TEXT"),
+    # The language the ASR reports for the result, detected when none was
+    # requested; `language` keeps the requested one (NULL: automatic).
+    ("detected_language", "transcriptions", "detected_language TEXT"),
 ]
 
 # One-time data steps are keyed by PRAGMA user_version: init_db runs each step

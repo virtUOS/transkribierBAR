@@ -9,6 +9,7 @@ from app.public_pages import (
     Lang,
     apply_features,
     fill_settings,
+    guide_features,
     notice_fallback_note,
     privacy_notice,
     setting_values,
@@ -35,13 +36,7 @@ def _not_found() -> Response:
 
 
 def _features() -> dict[str, bool]:
-    return {
-        "llm": bool(settings.LLM_PROVIDER),
-        "api_tokens": settings.ENABLE_API_TOKENS,
-        "privacy": bool(NOTICES),
-        # Sentences with the contact address are dropped when none is configured.
-        "contact": bool(settings.CONTACT_EMAIL),
-    }
+    return guide_features(bool(NOTICES))
 
 
 def _read(rel: str) -> str | None:
