@@ -43,8 +43,8 @@ If the transcription fails, **Transcription failed** appears with the reason aft
 
 If the language was set to Auto-detect and the speech recognition reported an error, it also says: **The language was set to Auto-detect. Choosing the language may help.**
 
-**Try again** takes you back to the settings for the same file. Change what is needed there, for example the language, and click **Transcribe**. You do not have to upload the file again.
+**Try again** takes you to the settings for the same file. Check them, change for example the language, and click **Transcribe**. You do not have to upload the file again.
 
-The failed transcription stays in the overview with the red status "Failed". If you open it there, its page shows the same notice with the reason and **Try again**. A new transcription of the same file appears as an entry of its own. You remove the failed one with **Delete transcription** on its page; the file is kept as long as another transcription uses it.
+The failed transcription stays in the overview with the red status "Failed". If you open it there, its page shows the same notice with the reason and **Try again**. From there, the settings are not those of the failed attempt; check **Transcription language** and **Quality** in particular. A new transcription of the same file appears as an entry of its own. It belongs to the same file and therefore has the same period (see "Archive"). You remove the failed one with **Delete transcription** on its page. If another transcription uses the file, the file is kept.
 
 If the transcription fails repeatedly, write to [{{contact_email}}](mailto:{{contact_email}}).

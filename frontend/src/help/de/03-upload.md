@@ -43,8 +43,8 @@ Schlägt die Transkription fehl, erscheint **Transkription fehlgeschlagen** mit 
 
 War als Sprache „Automatisch erkennen“ eingestellt und hat die Spracherkennung einen Fehler gemeldet, steht darunter: **Als Sprache war „Automatisch erkennen“ eingestellt. Es kann helfen, die Sprache auszuwählen.**
 
-**Erneut versuchen** führt Sie zu den Einstellungen für dieselbe Datei zurück. Ändern Sie dort, was nötig ist, etwa die Sprache, und klicken Sie auf **Transkribieren**. Die Datei müssen Sie dafür nicht noch einmal hochladen.
+**Erneut versuchen** führt Sie zu den Einstellungen für dieselbe Datei. Prüfen Sie sie, ändern Sie etwa die Sprache, und klicken Sie auf **Transkribieren**. Die Datei müssen Sie dafür nicht noch einmal hochladen.
 
-Die fehlgeschlagene Transkription bleibt mit dem roten Status „Fehlgeschlagen“ in der Übersicht. Öffnen Sie sie dort, zeigt ihre Seite denselben Hinweis mit dem Grund und **Erneut versuchen**. Eine neue Transkription derselben Datei erscheint als eigener Eintrag. Die fehlgeschlagene entfernen Sie mit **Transkription löschen** auf ihrer Seite; die Datei bleibt erhalten, solange eine andere Transkription sie verwendet.
+Die fehlgeschlagene Transkription bleibt mit dem roten Status „Fehlgeschlagen“ in der Übersicht. Öffnen Sie sie dort, zeigt ihre Seite denselben Hinweis mit dem Grund und **Erneut versuchen**. Von dort aus zeigen die Einstellungen nicht die des fehlgeschlagenen Versuchs; prüfen Sie vor allem **Sprache für die Transkription** und **Qualität**. Eine neue Transkription derselben Datei erscheint als eigener Eintrag. Sie gehört zur selben Datei und hat deshalb dieselbe Frist (siehe „Archiv“). Die fehlgeschlagene entfernen Sie mit **Transkription löschen** auf ihrer Seite. Verwendet eine andere Transkription die Datei, bleibt die Datei dabei erhalten.
 
 Schlägt die Transkription wiederholt fehl, schreiben Sie an [{{contact_email}}](mailto:{{contact_email}}).
