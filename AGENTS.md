@@ -120,7 +120,7 @@ current numbers. Raise them when coverage grows; never lower them to get a chang
 
 ## Code Style
 
-- Frontend: ESLint 9 + TypeScript ESLint, no semicolons enforced by formatter
+- Frontend: ESLint 10 + TypeScript ESLint, no semicolons enforced by formatter
 - Backend: Standard Python conventions, async/await throughout
 - Commit messages: conventional commits (`feat:`, `fix:`, `refactor:`, etc.)
 - Never add "Co-Authored-By" lines to commit messages
