@@ -537,6 +537,32 @@
       "presets": "Voreinstellungen",
       "bundles": "Pakete",
       "api-access": "API-Zugriff"
+    },
+    "assistant": {
+      "tabManual": "Handbuch",
+      "tabAssistant": "Assistent",
+      "greeting": "Fragen Sie mich, wie etwas in transkribierBAR funktioniert.",
+      "starters": [
+        "Wie benenne ich die Sprechenden um?",
+        "Wie lade ich Untertitel als SRT herunter?",
+        "Wie lange werden meine Dateien aufbewahrt?"
+      ],
+      "placeholder": "Ihre Frage …",
+      "send": "Senden",
+      "newConversation": "Neues Gespräch",
+      "thinking": "Der Assistent schreibt …",
+      "noteModel": "Antworten erzeugt ein Sprachmodell. Sie können Fehler enthalten.",
+      "noteStorage": "transkribierBAR speichert dieses Gespräch nicht.",
+      "errors": {
+        "assistant_busy": "Es läuft bereits eine Anfrage.",
+        "llm_error": "Der Assistent konnte keine Antwort erzeugen.",
+        "server_error": "Der Assistent konnte keine Antwort erzeugen.",
+        "output_limit": "Die Antwort war zu lang und wurde abgeschnitten.",
+        "incomplete": "Die Antwort ist unvollständig angekommen.",
+        "network": "Die Verbindung zum Server ist fehlgeschlagen."
+      },
+      "retry": "Erneut versuchen",
+      "answerReady": "Antwort des Assistenten ist da."
     }
   },
   "invitations": {

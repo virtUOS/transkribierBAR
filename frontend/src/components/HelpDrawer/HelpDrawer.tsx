@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useStore } from '../../store'
 import { HelpSidebar } from './HelpSidebar'
 import { HelpContent } from './HelpContent'
+import { AssistantChat } from './AssistantChat'
 import { visibleSections, viewToSection } from './helpSections'
 import type { HelpSectionId } from './helpSections'
 
@@ -21,6 +22,10 @@ export function HelpDrawer() {
   const config = useStore((s) => s.config)
   const privacyHref = `${import.meta.env.BASE_URL}handbuch/${i18n.language === 'de' ? 'datenschutz/' : 'en/privacy/'}`
   const contactEmail = config?.contact_email
+  const helpTab = useStore((s) => s.helpTab)
+  const setHelpTab = useStore((s) => s.setHelpTab)
+  const assistantEnabled = !!config?.support_assistant_enabled
+  const showAssistant = assistantEnabled && helpTab === 'assistant'
   const visible = useMemo(() => visibleSections(config), [config])
 
   // Compute the section to land on when opening.
@@ -83,6 +88,14 @@ export function HelpDrawer() {
     return () => document.removeEventListener('keydown', handleKey)
   }, [open, closeHelp])
 
+  const handleTabKey = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+    e.preventDefault()
+    const next = helpTab === 'manual' ? 'assistant' : 'manual'
+    setHelpTab(next)
+    document.getElementById(`help-tab-${next}`)?.focus()
+  }
+
   if (!open) return null
 
   return (
@@ -117,6 +130,34 @@ export function HelpDrawer() {
             ✕
           </button>
         </div>
+        {assistantEnabled && (
+          <div role="tablist" aria-label={t('help.title')} className="flex gap-1 px-6 pt-2 border-b border-gray-700">
+            {(['manual', 'assistant'] as const).map((tab) => {
+              const selected = (tab === 'assistant') === showAssistant
+              return (
+                <button
+                  key={tab}
+                  id={`help-tab-${tab}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  tabIndex={selected ? 0 : -1}
+                  onClick={() => setHelpTab(tab)}
+                  onKeyDown={handleTabKey}
+                  className={`px-4 py-2 text-sm rounded-t border-b-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 ${
+                    selected ? 'border-blue-400 text-white' : 'border-transparent text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  {t(tab === 'manual' ? 'help.assistant.tabManual' : 'help.assistant.tabAssistant')}
+                </button>
+              )
+            })}
+          </div>
+        )}
+        {showAssistant ? (
+          <AssistantChat />
+        ) : (
+          <>
         <div className="md:hidden px-4 py-2 border-b border-gray-700">
           <select
             value={activeId}
@@ -135,6 +176,8 @@ export function HelpDrawer() {
           <HelpSidebar activeId={activeId} onSelect={setActiveId} />
           <HelpContent sectionId={activeId} />
         </div>
+          </>
+        )}
         <div className="px-6 py-3 border-t border-gray-700 text-sm text-gray-400 space-y-1">
           {contactEmail && (
             <div>

@@ -201,4 +201,24 @@ describe('settingValues', () => {
   it('returns an empty object without config', () => {
     expect(settingValues(null, 'de')).toEqual({})
   })
+
+  it('hides the tab switch when the assistant is disabled', () => {
+    openHelp(buildConfig({ support_assistant_enabled: false }))
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
+  })
+
+  it('shows the tabs and switches to the assistant', () => {
+    openHelp(buildConfig({ support_assistant_enabled: true }))
+    expect(screen.getAllByRole('tab')).toHaveLength(2)
+    expect(screen.getByRole('button', { name: 'Einführung' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Assistent' }))
+    expect(screen.getByText('Fragen Sie mich, wie etwas in transkribierBAR funktioniert.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Einführung' })).not.toBeInTheDocument()
+  })
+
+  it('renders the manual when the assistant becomes disabled', () => {
+    useStore.setState({ helpTab: 'assistant' })
+    openHelp(buildConfig({ support_assistant_enabled: false }))
+    expect(screen.getByRole('button', { name: 'Einführung' })).toBeInTheDocument()
+  })
 })
