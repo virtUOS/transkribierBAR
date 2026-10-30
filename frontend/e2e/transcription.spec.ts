@@ -12,13 +12,12 @@ test('upload, transcribe and see the transcript in the editor', async ({ page, a
 test('a transcription shows up in the archive and can be reopened', async ({ page, audioFile }) => {
   await transcribe(page, audioFile)
 
-  // The fake LLM titles the transcription right after it completes, which the
-  // editor already open does not pick up; the archive does. Once
-  // https://github.com/virtUOS/transkribierBAR/issues/248 is fixed, check the editor header instead.
-  await expect(async () => {
-    await page.goto('/')
-    await expect(page.locator('[data-help="archive-title"]')).toHaveText(['Weekly project meeting'], { timeout: 1000 })
-  }).toPass()
+  // The fake LLM titles the transcription right after it completes; the status
+  // WebSocket brings the title to the open editor (it checks every 5 s).
+  await expect(page.locator('[data-help="detail-title"]')).toContainText('Weekly project meeting', { timeout: 15_000 })
+
+  await page.goto('/')
+  await expect(page.locator('[data-help="archive-title"]')).toHaveText(['Weekly project meeting'])
   await page.locator('[data-help="archive-title"]').getByText('Weekly project meeting').click()
   await expect(page.locator('table tbody tr').first()).toContainText('Welcome to the weekly project meeting.')
 })

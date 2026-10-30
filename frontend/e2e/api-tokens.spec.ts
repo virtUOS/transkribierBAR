@@ -7,12 +7,12 @@ test('a token created in the settings reaches the API, and stops working once re
   await page.goto('/')
   await page.locator('[data-help="nav-settings"]').click()
   await page.locator('[data-help="token-create"]').click()
-  // By placeholder because the Name label is not tied to the field
-  // (https://github.com/virtUOS/transkribierBAR/issues/250); use getByLabel('Name') once that is fixed.
-  await page.getByPlaceholder('e.g. my-script').fill('e2e')
-  await page.getByRole('button', { name: 'Create', exact: true }).click()
-  const secret = (await page.getByText(/^tw_/).textContent())!.trim()
-  await page.getByRole('button', { name: 'Done' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Name').fill('e2e')
+  await dialog.getByRole('button', { name: 'Create', exact: true }).click()
+  const secret = (await dialog.getByText(/^tw_/).textContent())!.trim()
+  await dialog.getByRole('button', { name: 'Done' }).click()
+  await expect(dialog).toBeHidden()
   await expect(page.locator('[data-help="token-prefix"]')).toHaveCount(1)
   expect(secret.startsWith((await page.locator('[data-help="token-prefix"]').textContent())!.replace(/\W*$/, ''))).toBe(true)
 
