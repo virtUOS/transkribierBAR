@@ -16,7 +16,7 @@ export default mergeConfig(
         include: ['src/**/*.{ts,tsx}'],
         exclude: ['src/test/**', 'src/main.tsx'],
         reporter: ['text-summary', 'html'],
-        thresholds: { lines: 55, statements: 55, branches: 53, functions: 59 },
+        thresholds: { lines: 78, statements: 77, branches: 73, functions: 77 },
       },
     },
   }),
