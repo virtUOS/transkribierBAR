@@ -22,7 +22,7 @@ Your changes only exist in your browser until you save them (see "Saving").
 
 ## Editing times
 
-Use the pencil icon next to **Start** or **End** to change a time. The field shows it as `HH:MM:SS`. Always enter all three parts, for example `00:01:30`. Press Enter or click outside the field to apply the time. The field shows whole seconds. When you apply it, fractions of a second are dropped, even if you did not change the time.
+Use the pencil icon next to **Start** or **End** to change a time. The table shows whole seconds, the field shows the time with milliseconds, for example `00:01:30.500`. You can also enter only minutes and seconds (`01:30`) or only seconds (`90`). A fraction of a second follows a point or a comma, for example `12,5`. Press Enter or click outside the field to apply the time. If the time is unchanged or not a valid time, the row stays as it was.
 
 If the new time overlaps neighboring rows, the editor adjusts them: a new start shortens the end of the previous rows, a new end moves the start of the following rows. Before that, a prompt tells you how many rows are affected. If you cancel it, nothing changes. If the new start is after the end of the row, the end moves along. Likewise the start moves back if the new end is before it.
 
@@ -52,7 +52,11 @@ Below the player, **Download recording** downloads the recording. For videos, **
 
 ## Saving
 
-As soon as you change something, the buttons **Save changes** and **Restore original** appear above the table. Saving replaces the previously saved version on the server. After a prompt, **Restore original** discards all changes since the last save and reloads the saved version. transkribierBAR does not keep an earlier version after you save.
+As soon as you change something, the buttons **Discard changes** and **Save changes** appear above the table. Saving replaces the previously saved version on the server. After a prompt, **Discard changes** discards all changes since the last save and reloads the saved version.
+
+transkribierBAR also keeps the transcription as the speech recognition delivered it. Saving never changes this original. As soon as the saved version differs from it, the button **Restore original** appears. After a prompt, it loads this original into the editor: the text, times and speaker of every row. If the **Refined** or **Translated** view is shown, the editor switches to **Original**. Until you click **Save changes**, the restored original is an unsaved change like any other: the saved version stays on the server, and **Discard changes** brings it back. The names from the **Speaker Names** panel stay. A refinement, translation or analysis stays as well. Whether it counts as out of date afterwards depends on the saved text, as after any other change. The original is deleted together with the transcription.
+
+For a transcription that already existed before transkribierBAR began keeping the original, the original is the version that was saved at that point, including any changes saved before.
 
 If you switch to a format tab such as **SRT**, your changes are kept, and the format already shows them.
 
@@ -62,4 +66,4 @@ If you switch to a format tab such as **SRT**, your changes are kept, and the fo
 
 If the AI features are set up on this server, the editor offers the buttons **Refine with LLM** and **Translate** above the table as long as there is no refinement or translation yet. A refinement and a translation appear next to the original. Use the buttons **Original**, **Refined** and **Translated** to switch between them. The **Refined** and **Translated** views are read-only: the editing icons are missing there, and changes only apply to the original. **Delete Refinement** and **Delete translation** remove the respective version after a prompt.
 
-In the **Refined** view, **Changes Summary** says what the language model changed. Changed rows carry a dot next to the row number. Clicking it shows the original and the refined text side by side (larger screens only). How both functions work is described in the sections "Refinement" and "Translation".
+In the **Refined** view, **Changes Summary** says what the language model changed. Changed rows have a **Compare** button next to the text, on every screen size. It shows the original and the refined text side by side below the row; click it again to close the comparison. On larger screens, changed rows also carry a dot next to the row number. How both functions work is described in the sections "Refinement" and "Translation".

@@ -1,5 +1,6 @@
 import asyncio
 import json
+from collections.abc import Callable
 from types import SimpleNamespace
 
 import pytest
@@ -17,8 +18,9 @@ def _utterances(n):
 
 
 class _FakeCompletions:
-    def __init__(self, tracker):
+    def __init__(self, tracker, speaker_for=None):
         self.tracker = tracker
+        self.speaker_for = speaker_for
 
     async def create(self, *, model, messages, **kwargs):
         self.tracker["calls"] += 1
@@ -30,6 +32,8 @@ class _FakeCompletions:
         # Earlier chunks sleep longest, so completion order reverses input order.
         await asyncio.sleep(0.05 / (chunk[0]["start"] / 1000 + 1))
         self.tracker["concurrent"] -= 1
+        if self.speaker_for is not None:
+            chunk = [{**u, "speaker": self.speaker_for(u)} for u in chunk]
         payload = json.dumps({"utterances": chunk})
         return SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content=payload))],
@@ -37,11 +41,13 @@ class _FakeCompletions:
         )
 
 
-def _fake_provider(tracker):
+def _fake_provider(
+    tracker, speaker_for: Callable[[dict], str | None] | None = None
+):
     provider = OpenAIProvider.__new__(OpenAIProvider)
     provider._model = "fake"
     provider._client = SimpleNamespace(
-        chat=SimpleNamespace(completions=_FakeCompletions(tracker))
+        chat=SimpleNamespace(completions=_FakeCompletions(tracker, speaker_for))
     )
     return provider
 
@@ -66,3 +72,14 @@ async def test_translation_runs_chunks_concurrently():
 
     assert tracker["calls"] > 1, "expected the transcript to be chunked"
     assert tracker["max_concurrent"] > 1, "chunks were sent sequentially"
+
+
+@pytest.mark.asyncio
+async def test_translation_returns_the_source_speakers():
+    utterances = _utterances(120)
+    for i, u in enumerate(utterances):
+        u["speaker"] = f"SPEAKER_0{i % 2}"
+    tracker = {"calls": 0, "concurrent": 0, "max_concurrent": 0}
+    provider = _fake_provider(tracker, speaker_for=lambda u: u["speaker"].replace("SPEAKER", "SPRECHER"))
+    result = await _call_llm_translation(provider, utterances, "de")
+    assert [u["speaker"] for u in result] == [u["speaker"] for u in utterances]

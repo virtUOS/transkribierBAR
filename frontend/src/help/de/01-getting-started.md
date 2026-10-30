@@ -9,7 +9,7 @@ Sie beginnen in der Übersicht Ihrer Transkriptionen. Von dort laden Sie eine Da
 ## Ihre erste Transkription
 
 1. Klicken Sie in der Übersicht auf **+ Hochladen** und wählen Sie eine Audio- oder Videodatei. Oder klicken Sie auf **+ Aufnehmen**, um im Browser aufzunehmen; nach dem Beenden lädt transkribierBAR die Aufnahme automatisch hoch. **+ Aufnehmen** erscheint nur, wenn Ihr Browser Aufnahmen unterstützt.
-2. Wählen Sie die **Sprache für die Transkription**. Voreingestellt ist **Automatisch erkennen**. Das **Modell** ist fest eingestellt: {{default_model}}.
+2. Wählen Sie die **Sprache für die Transkription**. Voreingestellt ist **Automatisch erkennen**. Unter **Qualität** wählen Sie das Modell; voreingestellt ist {{default_model}}. Bietet Ihre Installation nur ein Modell an, heißt das Feld **Modell** und zeigt es an.
 3. **Sprechende erkennen** ist eingeschaltet und trennt die Beiträge verschiedener Personen. Spricht nur eine Person, können Sie es ausschalten.
 4. Klicken Sie auf **Transkribieren**. Läuft der Upload noch, heißt die Schaltfläche **Transkribieren wenn bereit**; die Transkription startet dann von selbst, sobald die Datei hochgeladen ist.
 5. Warten Sie, bis die Transkription fertig ist. Die Anzeige zeigt **Warteschlange…**, solange sie wartet, und **Wird transkribiert…**, während sie läuft.

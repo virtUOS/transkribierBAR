@@ -38,6 +38,7 @@ async def test_seed_creates_completed_transcriptions(seeded):
     )
     assert len(rows) == 2
     for r in rows:
+        assert r["original_result_json"] == r["result_json"]
         utterances = json.loads(r["result_json"])
         assert {u["speaker"] for u in utterances} == {"SPEAKER_00", "SPEAKER_01"}
         assert utterances[-1]["end"] > 100_000

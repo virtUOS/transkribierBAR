@@ -1,4 +1,5 @@
 import json
+from collections.abc import AsyncIterator
 
 from openai import AsyncOpenAI
 
@@ -75,6 +76,41 @@ class OpenAIProvider(LLMProvider):
                 f"The language model's {operation} reply was truncated at the output limit."
             )
         return reject_schema_echo(json.loads(choice.message.content or "{}"))
+
+    async def stream_chat(
+        self, messages: list[dict], operation: str, max_tokens: int
+    ) -> AsyncIterator[str]:
+        # Reasoning arrives in delta.reasoning_content and is never yielded.
+        client = self._client.with_options(timeout=90)
+        stream = await client.chat.completions.create(
+            model=self._model,
+            messages=messages,
+            temperature=0.2,
+            max_tokens=max_tokens,
+            stream=True,
+            stream_options={"include_usage": True},
+            extra_body=self._extra_body(operation),
+        )
+        finish_reason = None
+        usage = None
+        try:
+            async for chunk in stream:
+                usage = getattr(chunk, "usage", None) or usage
+                if not getattr(chunk, "choices", None):
+                    continue
+                choice = chunk.choices[0]
+                content = getattr(choice.delta, "content", None)
+                if content:
+                    yield content
+                if getattr(choice, "finish_reason", None):
+                    finish_reason = choice.finish_reason
+        finally:
+            await stream.close()
+        track_llm_tokens(settings.LLM_PROVIDER, self._model, operation, usage)
+        if finish_reason == "length":
+            raise OutputLimitExceeded(
+                f"The language model's {operation} reply was truncated at the output limit."
+            )
 
     async def _consolidate_refinement_summaries(self, summaries: list[str]) -> str:
         response = await self._client.chat.completions.create(

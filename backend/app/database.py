@@ -3,6 +3,7 @@ import uuid
 import aiosqlite
 from contextlib import asynccontextmanager
 from app.config import settings
+from app.services.speaker_labels import relabel_stored_speakers
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -132,6 +133,13 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash);
 
+CREATE TABLE IF NOT EXISTS api_token_expiry_notices (
+    token_id TEXT NOT NULL REFERENCES api_tokens(id) ON DELETE CASCADE,
+    days_before INTEGER NOT NULL,
+    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (token_id, days_before)
+);
+
 CREATE TABLE IF NOT EXISTS invitations (
     id TEXT PRIMARY KEY,
     email TEXT NOT NULL,
@@ -168,7 +176,19 @@ MIGRATIONS = [
     ("translation_source_hash", "transcriptions", "translation_source_hash TEXT"),
     ("source", "analyses", "source TEXT"),
     ("source_hash", "analyses", "source_hash TEXT"),
+    ("error_code", "transcriptions", "error_code TEXT"),
+    # The first stored result; restored by the editor's Restore original.
+    # Written only on completion and by the backfill in init_db.
+    ("original_result_json", "transcriptions", "original_result_json TEXT"),
+    # The language the ASR reports for the result, detected when none was
+    # requested; `language` keeps the requested one (NULL: automatic).
+    ("detected_language", "transcriptions", "detected_language TEXT"),
 ]
+
+# One-time data steps are keyed by PRAGMA user_version: init_db runs each step
+# whose number is above the stored version, then stores DATA_VERSION. The next
+# step goes under `if version < 2:`, with DATA_VERSION raised to 2.
+DATA_VERSION = 1
 
 
 async def init_db(db_path: str) -> None:
@@ -199,7 +219,9 @@ async def init_db(db_path: str) -> None:
                     language TEXT,
                     llm_provider TEXT,
                     llm_model TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    source TEXT,
+                    source_hash TEXT
                 )
             """)
             # Clean up orphaned in-progress placeholders
@@ -245,6 +267,20 @@ async def init_db(db_path: str) -> None:
             "UPDATE analyses SET source = 'original' "
             "WHERE analysis_json IS NOT NULL AND source IS NULL"
         )
+        # Rows from before original_result_json existed get their state at the
+        # update as their original (only NULL rows change)
+        await db.execute(
+            "UPDATE transcriptions SET original_result_json = result_json "
+            "WHERE original_result_json IS NULL AND result_json IS NOT NULL"
+        )
+        cursor = await db.execute("PRAGMA user_version")
+        version = (await cursor.fetchone())[0]
+        if version < 1:
+            # Refinements and translations stored before #215 carry speaker names
+            await relabel_stored_speakers(db)
+        if version < DATA_VERSION:
+            # Committed together with the steps above, so a crash reruns them
+            await db.execute(f"PRAGMA user_version = {DATA_VERSION}")
         await db.commit()
 
 

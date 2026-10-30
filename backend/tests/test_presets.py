@@ -171,3 +171,196 @@ async def test_bundle_rejects_foreign_preset(client):
         headers=b,
     )
     assert resp.status_code == 404
+
+
+A = {"X-Auth-Request-User": "user-a"}
+B = {"X-Auth-Request-User": "user-b"}
+
+_PRESET_BODIES = {
+    "transcription": {"name": "T", "language": "de", "model": "large-v3", "min_speakers": 2, "max_speakers": 4,
+                      "initial_prompt": "Vorlesung", "hotwords": "Osnabrück"},
+    "analysis": {"name": "An", "template": "agenda", "agenda": "1. Budget", "language": "en",
+                 "chapter_hints": [{"title": "Intro"}, {"description": "Q&A"}]},
+    "refinement": {"name": "R", "context": "Physics lecture"},
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", list(_PRESET_BODIES))
+async def test_preset_get_by_id_round_trips_all_fields(client, kind):
+    body = _PRESET_BODIES[kind]
+    created = (await client.post(f"/api/presets/{kind}", json=body, headers=A)).json()
+    resp = await client.get(f"/api/presets/{kind}/{created['id']}", headers=A)
+    assert resp.status_code == 200
+    data = resp.json()
+    for key, value in body.items():
+        if key == "chapter_hints":
+            assert data[key] == [{"title": "Intro", "description": None}, {"title": None, "description": "Q&A"}]
+        else:
+            assert data[key] == value
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", list(_PRESET_BODIES))
+async def test_preset_is_invisible_and_immutable_for_other_users(client, kind):
+    body = _PRESET_BODIES[kind]
+    preset_id = (await client.post(f"/api/presets/{kind}", json=body, headers=A)).json()["id"]
+
+    assert (await client.get(f"/api/presets/{kind}/{preset_id}", headers=B)).status_code == 404
+    assert (await client.put(f"/api/presets/{kind}/{preset_id}", json={**body, "name": "hijack"}, headers=B)).status_code == 404
+    assert (await client.delete(f"/api/presets/{kind}/{preset_id}", headers=B)).status_code == 404
+
+    own = await client.get(f"/api/presets/{kind}/{preset_id}", headers=A)
+    assert own.status_code == 200
+    assert own.json()["name"] == body["name"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", list(_PRESET_BODIES))
+async def test_preset_unknown_id_is_404(client, kind):
+    body = _PRESET_BODIES[kind]
+    assert (await client.get(f"/api/presets/{kind}/missing", headers=A)).status_code == 404
+    assert (await client.put(f"/api/presets/{kind}/missing", json=body, headers=A)).status_code == 404
+    assert (await client.delete(f"/api/presets/{kind}/missing", headers=A)).status_code == 404
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", list(_PRESET_BODIES))
+async def test_preset_requires_name(client, kind):
+    body = {k: v for k, v in _PRESET_BODIES[kind].items() if k != "name"}
+    assert (await client.post(f"/api/presets/{kind}", json=body, headers=A)).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_analysis_preset_rejects_empty_chapter_hint(client):
+    resp = await client.post("/api/presets/analysis", json={"name": "x", "chapter_hints": [{}]}, headers=A)
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_analysis_preset_update_can_clear_chapter_hints(client):
+    preset_id = (await client.post("/api/presets/analysis", json=_PRESET_BODIES["analysis"], headers=A)).json()["id"]
+    resp = await client.put(f"/api/presets/analysis/{preset_id}", json={"name": "An2", "template": "summary"}, headers=A)
+    assert resp.status_code == 200
+    assert resp.json()["chapter_hints"] is None
+    assert resp.json()["agenda"] is None
+    assert resp.json()["name"] == "An2"
+
+
+@pytest.mark.asyncio
+async def test_refinement_preset_update(client):
+    preset_id = (await client.post("/api/presets/refinement", json={"name": "R"}, headers=A)).json()["id"]
+    resp = await client.put(f"/api/presets/refinement/{preset_id}", json={"name": "R2", "context": "Chemistry"}, headers=A)
+    assert resp.status_code == 200
+    assert resp.json()["context"] == "Chemistry"
+    listed = (await client.get("/api/presets/refinement", headers=A)).json()
+    assert [p["name"] for p in listed] == ["R2"]
+
+
+@pytest.mark.asyncio
+async def test_bundle_is_invisible_and_immutable_for_other_users(client):
+    bundle_id = (await client.post("/api/presets/bundles", json={"name": "A's"}, headers=A)).json()["id"]
+
+    assert (await client.get(f"/api/presets/bundles/{bundle_id}", headers=B)).status_code == 404
+    assert (await client.put(f"/api/presets/bundles/{bundle_id}", json={"name": "hijack"}, headers=B)).status_code == 404
+    assert (await client.put(f"/api/presets/bundles/{bundle_id}/default", headers=B)).status_code == 404
+    assert (await client.delete(f"/api/presets/bundles/{bundle_id}", headers=B)).status_code == 404
+    assert (await client.get("/api/presets/bundles", headers=B)).json() == []
+
+    own = await client.get(f"/api/presets/bundles/{bundle_id}", headers=A)
+    assert own.status_code == 200
+    assert own.json()["name"] == "A's"
+    assert own.json()["is_default"] is False
+
+
+@pytest.mark.asyncio
+async def test_bundle_unknown_id_is_404(client):
+    assert (await client.get("/api/presets/bundles/missing", headers=A)).status_code == 404
+    assert (await client.put("/api/presets/bundles/missing", json={"name": "x"}, headers=A)).status_code == 404
+    assert (await client.delete("/api/presets/bundles/missing", headers=A)).status_code == 404
+    assert (await client.put("/api/presets/bundles/missing/default", headers=A)).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_bundle_update_replaces_references(client):
+    tp = (await client.post("/api/presets/transcription", json={"name": "T"}, headers=A)).json()["id"]
+    rp = (await client.post("/api/presets/refinement", json={"name": "R"}, headers=A)).json()["id"]
+    bundle_id = (await client.post("/api/presets/bundles", json={"name": "B", "transcription_preset_id": tp}, headers=A)).json()["id"]
+
+    resp = await client.put(
+        f"/api/presets/bundles/{bundle_id}",
+        json={"name": "B2", "refinement_preset_id": rp, "translate_language": "en"},
+        headers=A,
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["name"] == "B2"
+    assert data["transcription_preset_id"] is None
+    assert data["refinement_preset_id"] == rp
+    assert data["translate_language"] == "en"
+
+
+@pytest.mark.asyncio
+async def test_only_one_default_bundle_per_user(client):
+    first = (await client.post("/api/presets/bundles", json={"name": "first"}, headers=A)).json()["id"]
+    second = (await client.post("/api/presets/bundles", json={"name": "second"}, headers=A)).json()["id"]
+    b_bundle = (await client.post("/api/presets/bundles", json={"name": "B's"}, headers=B)).json()["id"]
+    await client.put(f"/api/presets/bundles/{b_bundle}/default", headers=B)
+
+    await client.put(f"/api/presets/bundles/{first}/default", headers=A)
+    resp = await client.put(f"/api/presets/bundles/{second}/default", headers=A)
+    assert resp.json()["is_default"] is True
+
+    defaults = {b["id"]: b["is_default"] for b in (await client.get("/api/presets/bundles", headers=A)).json()}
+    assert defaults == {first: False, second: True}
+    # Another user's default is untouched by A's changes
+    assert (await client.get("/api/presets/default", headers=B)).json()["id"] == b_bundle
+
+    # Clearing A's default leaves B's alone
+    await client.delete("/api/presets/default", headers=A)
+    assert (await client.get("/api/presets/default", headers=A)).json() is None
+    assert (await client.get("/api/presets/default", headers=B)).json()["id"] == b_bundle
+
+
+@pytest.mark.asyncio
+async def test_default_bundle_expands_all_presets(client):
+    tp = (await client.post("/api/presets/transcription", json=_PRESET_BODIES["transcription"], headers=A)).json()["id"]
+    ap = (await client.post("/api/presets/analysis", json=_PRESET_BODIES["analysis"], headers=A)).json()["id"]
+    rp = (await client.post("/api/presets/refinement", json=_PRESET_BODIES["refinement"], headers=A)).json()["id"]
+    bundle_id = (await client.post("/api/presets/bundles", json={
+        "name": "Full", "transcription_preset_id": tp, "analysis_preset_id": ap,
+        "refinement_preset_id": rp, "translate_language": "fr",
+    }, headers=A)).json()["id"]
+    await client.put(f"/api/presets/bundles/{bundle_id}/default", headers=A)
+
+    data = (await client.get("/api/presets/default", headers=A)).json()
+    assert data["id"] == bundle_id
+    assert data["translate_language"] == "fr"
+    assert data["transcription_preset"]["hotwords"] == "Osnabrück"
+    assert data["analysis_preset"]["agenda"] == "1. Budget"
+    assert data["analysis_preset"]["chapter_hints"][0]["title"] == "Intro"
+    assert data["refinement_preset"]["context"] == "Physics lecture"
+
+
+@pytest.mark.asyncio
+async def test_default_bundle_with_deleted_presets_expands_to_none(client):
+    ap = (await client.post("/api/presets/analysis", json={"name": "a"}, headers=A)).json()["id"]
+    rp = (await client.post("/api/presets/refinement", json={"name": "r"}, headers=A)).json()["id"]
+    bundle_id = (await client.post("/api/presets/bundles", json={
+        "name": "B", "analysis_preset_id": ap, "refinement_preset_id": rp,
+    }, headers=A)).json()["id"]
+    await client.put(f"/api/presets/bundles/{bundle_id}/default", headers=A)
+    await client.delete(f"/api/presets/analysis/{ap}", headers=A)
+    await client.delete(f"/api/presets/refinement/{rp}", headers=A)
+
+    data = (await client.get("/api/presets/default", headers=A)).json()
+    assert data["analysis_preset_id"] is None and data["analysis_preset"] is None
+    assert data["refinement_preset_id"] is None and data["refinement_preset"] is None
+
+
+@pytest.mark.asyncio
+async def test_deleting_default_bundle_leaves_no_default(client):
+    bundle_id = (await client.post("/api/presets/bundles", json={"name": "B"}, headers=A)).json()["id"]
+    await client.put(f"/api/presets/bundles/{bundle_id}/default", headers=A)
+    await client.delete(f"/api/presets/bundles/{bundle_id}", headers=A)
+    assert (await client.get("/api/presets/default", headers=A)).json() is None

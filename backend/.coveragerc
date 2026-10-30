@@ -1,0 +1,9 @@
+# Used by `pytest --cov` (CI runs it that way). fail_under sits just below the
+# current total so coverage cannot quietly drop; raise it as coverage grows.
+[run]
+source = app
+
+[report]
+fail_under = 95
+skip_covered = true
+show_missing = true

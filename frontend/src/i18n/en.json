@@ -21,6 +21,11 @@
     "initialPromptHelp": "Optional context for the transcription",
     "hotwords": "Hotwords",
     "hotwordsHelp": "Comma-separated technical terms",
+    "promptBudget": {
+      "usage": "Initial prompt and hotwords use {{percent}}% of the available space.",
+      "tooLong": "Initial prompt and hotwords together are too long ({{percent}}% of the available space). Please shorten them.",
+      "rejected": "Initial prompt and hotwords together are too long. Please shorten them."
+    },
     "groups": {
       "presets": "Presets",
       "transcription": "Transcription",
@@ -39,10 +44,10 @@
       "title": "API tokens",
       "createButton": "Create token",
       "nameLabel": "Name",
+      "namePlaceholder": "e.g. my-script",
       "expiresLabel": "Expires in",
-      "expiry30": "30 days",
-      "expiry90": "90 days",
-      "expiry365": "365 days",
+      "expiryDays_one": "{{count}} day",
+      "expiryDays_other": "{{count}} days",
       "createCta": "Create",
       "cancel": "Cancel",
       "revoke": "Revoke",
@@ -58,8 +63,19 @@
       "revoking": "Revoking…",
       "creating": "Creating…",
       "expiresOnTmpl": "expires {{date}}",
+      "expiringSoonTmpl": "\"{{name}}\" expires on {{date}}.",
+      "expiredTmpl": "\"{{name}}\" expired on {{date}}.",
+      "expiryNote": "Tokens cannot be extended. Create a new token and replace the old one in your scripts.",
       "lastUsedTmpl": "last used {{date}}",
-      "empty": "No API tokens yet. Create one to get started."
+      "empty": "No API tokens yet. Create one to get started.",
+      "errors": {
+        "duplicateName": "An active token with this name already exists.",
+        "limitReached": "The maximum number of active tokens has been reached.",
+        "notFound": "This token no longer exists.",
+        "createFailed": "Creating the token failed.",
+        "revokeFailed": "Revoking the token failed.",
+        "listFailed": "Loading the tokens failed."
+      }
     }
   },
   "transcription": {
@@ -70,6 +86,14 @@
     "success": "Transcription successful!",
     "failed": "Transcription failed",
     "failedDetail": "Error message: {{message}}",
+    "autoLanguageHint": "The language was set to Auto-detect. Choosing the language may help.",
+    "detectedLanguage": "Detected language: {{language}}",
+    "errors": {
+      "server_restarted": "The server restarted while this transcription was running.",
+      "timeout": "The speech recognition did not finish this transcription within the time limit.",
+      "asr_unreachable": "The request to the speech recognition failed.",
+      "asr_failed": "The speech recognition reported an error for this transcription."
+    },
     "delete": "Delete transcription",
     "history": "My Transcriptions",
     "doubleClickToRename": "Double-click to rename",
@@ -77,6 +101,12 @@
     "archived": "Archived",
     "expiresOn": "Expires: {{date}}",
     "confirmDelete": "Are you sure you want to delete this transcription? This cannot be undone.",
+    "status": {
+      "pending": "Pending",
+      "processing": "Processing",
+      "completed": "Completed",
+      "failed": "Failed"
+    },
     "statusPending": "Waiting in queue — please wait...",
     "statusProcessing": "Transcribing audio — please wait, this may take a few minutes.",
     "statusUploading": "Uploading file — please wait...",
@@ -85,7 +115,8 @@
     "summary": {
       "noLanguage": "auto",
       "speakersOff": "no speakers",
-      "speakersOne": "{{count}} speaker",
+      "speakers_one": "{{count}} speaker",
+      "speakers_other": "{{count}} speakers",
       "speakersRange": "{{min}}–{{max}} speakers",
       "viaBundle": "via \"{{name}}\" bundle",
       "line": "{{size}} · {{model}} · {{language}} · {{speakers}}"
@@ -109,7 +140,12 @@
     "download": "Download",
     "saveChanges": "Save changes",
     "restoreOriginal": "Restore original",
-    "confirmRestore": "Discard all unsaved changes and restore the original transcription?",
+    "confirmRestore": "Load the original transcription into the editor? Unsaved changes will be discarded. Your saved version is only replaced when you click Save changes.",
+    "saveFailed": "Saving failed.",
+    "restoreFailed": "Restoring failed.",
+    "discardChanges": "Discard changes",
+    "confirmDiscard": "Discard all unsaved changes and go back to the last saved version?",
+    "discardFailed": "Discarding failed.",
     "confirmTimestampCascade": "This change will adjust timestamps on {{count}} adjacent row(s). Continue?",
     "apply": "Apply",
     "generatingSummary": "Generating summary...",
@@ -130,6 +166,7 @@
     "speakerRenamePlaceholder": "New name (leave empty to keep)",
     "speakerMergeHint": "Tip: give two speakers the same name to merge them.",
     "speakerMergedCount": "{{count}} merged",
+    "speakerSaveFailed": "Saving the speaker names failed.",
     "noUtterances": "No speech was detected in this recording.",
     "protocol": "Protocol",
     "protocolLanguage": "Protocol language",
@@ -180,6 +217,8 @@
     "translationWarningLong": "This transcription has {{count}} utterances. Translation may take several minutes.",
     "originalText": "Original",
     "refinedText": "Refined",
+    "compare": "Compare",
+    "compareWithOriginal": "Compare with original",
     "editSpeaker": "Edit speaker name",
     "renameAllSpeaker": "Rename speaker in all utterances",
     "editTimestamp": "Edit timestamp",
@@ -211,6 +250,7 @@
     "fromRefined": "from refined",
     "sourceStale": "source has newer content",
     "sourceMissing": "source no longer available",
+    "translationReplacesStale": "The out-of-date translation will be replaced.",
     "refreshFromSource": "Re-run with same source",
     "hotkeyLegend": "Keyboard shortcuts",
     "hotkeyTab": "Next caption",
@@ -219,6 +259,8 @@
     "analysis": "Analysis"
   },
   "analysis": {
+    "removeChapter": "Remove chapter",
+    "removeItem": "Remove item",
     "selectTemplate": "Select a template",
     "customPrompt": "Custom",
     "templateSummary": "Summary with chapters",
@@ -244,6 +286,8 @@
     "newAnalysis": "+ New Analysis",
     "previousAnalyses": "Previous analyses",
     "confirmDeleteAnalysis": "Delete this analysis? This cannot be undone.",
+    "confirmDeleteItem": "Remove this item from the analysis?",
+    "deleteFailed": "Deleting the analysis failed.",
     "collapseForm": "Cancel"
   },
   "presets": {
@@ -447,6 +491,7 @@
     "newRecording": "Record",
     "presets": "Presets",
     "settings": "Settings",
+    "settingsAttention": "An API token expires soon or has expired",
     "menu": "Menu"
   },
   "common": {
@@ -492,6 +537,32 @@
       "presets": "Presets",
       "bundles": "Bundles",
       "api-access": "API Access"
+    },
+    "assistant": {
+      "tabManual": "Guide",
+      "tabAssistant": "Assistant",
+      "greeting": "Ask me how something works in transkribierBAR.",
+      "starters": [
+        "How do I rename the speakers?",
+        "How do I download subtitles as SRT?",
+        "How long are my files kept?"
+      ],
+      "placeholder": "Your question…",
+      "send": "Send",
+      "newConversation": "New conversation",
+      "thinking": "The assistant is writing…",
+      "noteModel": "Answers are generated by a language model. They can contain errors.",
+      "noteStorage": "transkribierBAR does not store this conversation.",
+      "errors": {
+        "assistant_busy": "A request is already running.",
+        "llm_error": "The assistant could not generate an answer.",
+        "server_error": "The assistant could not generate an answer.",
+        "output_limit": "The answer was too long and was cut off.",
+        "incomplete": "The answer arrived incomplete.",
+        "network": "The connection to the server failed."
+      },
+      "retry": "Try again",
+      "answerReady": "The assistant's answer is ready."
     }
   },
   "invitations": {

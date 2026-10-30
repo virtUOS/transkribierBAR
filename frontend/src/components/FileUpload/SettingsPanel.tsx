@@ -1,10 +1,15 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from '../../store'
-import { api } from '../../api/client'
+import { api, ApiError } from '../../api/client'
 import { LanguageSelect } from '../LanguageSelect'
 import { PresetSelect } from '../PresetSelect/PresetSelect'
 import { singleConfiguredModel } from '../../utils/models'
 import { SpeakerFields } from './SpeakerFields'
+import { bundleSettings, presetSettings } from './presetSettings'
+import { PromptBudgetNote } from './PromptBudgetNote'
+import { isOverPromptBudget } from '../../hooks/usePromptBudget'
+import type { PromptBudget } from '../../api/types'
 
 export interface SettingsPanelValues {
   language: string
@@ -22,9 +27,10 @@ interface SettingsPanelProps {
   values: SettingsPanelValues
   onChange: (patch: Partial<SettingsPanelValues>) => void
   saveError?: string | null
+  promptBudget?: PromptBudget | null
 }
 
-export function SettingsPanel({ values, onChange, saveError = null }: SettingsPanelProps) {
+export function SettingsPanel({ values, onChange, saveError = null, promptBudget = null }: SettingsPanelProps) {
   const { t } = useTranslation()
   const config = useStore((s) => s.config)
   const models = config?.whisper_models || []
@@ -36,43 +42,40 @@ export function SettingsPanel({ values, onChange, saveError = null }: SettingsPa
   const setActiveBundleId = useStore((s) => s.setActiveBundleId)
 
   const handleLoadPreset = (presetId: string | null) => {
-    onChange({ selectedPresetId: presetId })
-    if (!presetId) return
-    const preset = transcriptionPresets.find((p) => p.id === presetId)
-    if (!preset) return
-    onChange({
-      language: preset.language || 'auto',
-      model: preset.model,
-      detectSpeakers: preset.min_speakers > 0 || preset.max_speakers > 0,
-      minSpeakers: preset.min_speakers || 1,
-      maxSpeakers: preset.max_speakers || 2,
-      initialPrompt: preset.initial_prompt || '',
-      hotwords: preset.hotwords || '',
-    })
+    onChange(presetSettings(presetId, transcriptionPresets))
   }
 
+  // Shown only while the settings are those the failed save was made with
+  const [presetSaveError, setPresetSaveError] = useState<{ values: SettingsPanelValues; message: string } | null>(null)
+  const promptTooLong = isOverPromptBudget(promptBudget)
+
   const handleSavePreset = async (name: string) => {
-    const preset = await api.createTranscriptionPreset({
-      name,
-      language: values.language === 'auto' ? null : values.language,
-      model: singleModel ?? values.model,
-      min_speakers: values.detectSpeakers ? values.minSpeakers : 0,
-      max_speakers: values.detectSpeakers ? values.maxSpeakers : 0,
-      initial_prompt: values.initialPrompt || null,
-      hotwords: values.hotwords || null,
-    })
-    setTranscriptionPresets([...transcriptionPresets, preset])
-    onChange({ selectedPresetId: preset.id })
+    setPresetSaveError(null)
+    try {
+      const preset = await api.createTranscriptionPreset({
+        name,
+        language: values.language === 'auto' ? null : values.language,
+        model: singleModel ?? values.model,
+        min_speakers: values.detectSpeakers ? values.minSpeakers : 0,
+        max_speakers: values.detectSpeakers ? values.maxSpeakers : 0,
+        initial_prompt: values.initialPrompt || null,
+        hotwords: values.hotwords || null,
+      })
+      setTranscriptionPresets([...transcriptionPresets, preset])
+      onChange({ selectedPresetId: preset.id })
+    } catch (e) {
+      const message = e instanceof ApiError && e.code === 'prompt_too_long'
+        ? t('settings.promptBudget.rejected')
+        : e instanceof Error ? e.message : String(e)
+      setPresetSaveError({ values, message })
+    }
   }
+  const shownError = saveError ?? (presetSaveError?.values === values ? presetSaveError.message : null)
 
   const handleLoadBundle = (bundleId: string | null) => {
     setActiveBundleId(bundleId)
-    if (!bundleId) return
-    const bundle = bundles.find((b) => b.id === bundleId)
-    if (!bundle) return
-    if (bundle.transcription_preset_id) {
-      handleLoadPreset(bundle.transcription_preset_id)
-    }
+    const patch = bundleSettings(bundles.find((b) => b.id === bundleId), transcriptionPresets)
+    if (patch) onChange(patch)
   }
 
   const groupClass = 'flex flex-wrap items-end gap-3 border border-gray-700 rounded-md px-3 pt-1 pb-3'
@@ -124,6 +127,7 @@ export function SettingsPanel({ values, onChange, saveError = null }: SettingsPa
               onSelect={() => {}}
               onSave={handleSavePreset}
               hideDropdown
+              saveDisabled={promptTooLong}
             />
           </div>
         </fieldset>
@@ -185,14 +189,17 @@ export function SettingsPanel({ values, onChange, saveError = null }: SettingsPa
         </button>
       </div>
 
-      {saveError && (
+      {shownError && (
         <div className="p-4 bg-red-900/30 rounded-lg border border-red-700">
           <div className="flex items-center gap-3">
             <span className="text-red-400 text-lg" aria-hidden="true">!</span>
-            <span className="text-red-300 text-sm">{saveError}</span>
+            <span className="text-red-300 text-sm">{shownError}</span>
           </div>
         </div>
       )}
+
+      {/* A loaded preset can be too long while its fields are out of sight; Start is blocked then */}
+      {!values.showAdvanced && promptTooLong && <PromptBudgetNote budget={promptBudget} />}
 
       {/* Advanced options panel — wrapped in a labeled container to match other groups */}
       {values.showAdvanced && (
@@ -218,6 +225,7 @@ export function SettingsPanel({ values, onChange, saveError = null }: SettingsPa
               />
             </div>
           </div>
+          <PromptBudgetNote budget={promptBudget} />
         </fieldset>
       )}
     </div>

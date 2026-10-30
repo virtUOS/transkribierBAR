@@ -28,9 +28,11 @@ Klicken Sie in der Kopfzeile auf **Voreinstellungen**. Die Seite **Meine Voreins
 
 ## Transkriptions-Voreinstellungen
 
-Eine Transkriptions-Voreinstellung speichert Sprache, Erkennung der Sprechenden, Anfangs-Prompt, Schlüsselwörter und Modell. Das Formular auf der Seite hat die Felder **Name**, **Sprache für die Transkription**, **Modell**, **Sprechende erkennen** (mit der Mindest- und Höchstzahl der Sprechenden), **Schlüsselwörter** und **Anfangs-Prompt**. Das Modell ist fest auf {{default_model}} eingestellt und lässt sich nicht ändern.
+Eine Transkriptions-Voreinstellung speichert Sprache, Erkennung der Sprechenden, Anfangs-Prompt, Schlüsselwörter und Modell. Das Formular auf der Seite hat die Felder **Name**, **Sprache für die Transkription**, **Qualität**, **Sprechende erkennen** (mit der Mindest- und Höchstzahl der Sprechenden), **Schlüsselwörter** und **Anfangs-Prompt**. Unter **Qualität** wählen Sie das Modell wie in den Transkriptionseinstellungen; bietet Ihre Installation nur ein Modell an, heißt das Feld **Modell** und lässt sich nicht ändern.
 
-Wenn Sie eine solche Voreinstellung bei **Hochladen** oder **Aufnehmen** wählen, übernimmt sie die Sprache, die in ihr gespeicherten Einstellungen zu den Sprechenden, den Anfangs-Prompt und die Schlüsselwörter. Das Modell bleibt {{default_model}}.
+Wenn Sie eine solche Voreinstellung bei **Hochladen** oder **Aufnehmen** wählen, übernimmt sie die Sprache, die in ihr gespeicherten Einstellungen zu den Sprechenden, das Modell, den Anfangs-Prompt und die Schlüsselwörter.
+
+Wie in den Transkriptionseinstellungen teilen sich Anfangs-Prompt und Schlüsselwörter einen begrenzten Platz. Unter den Feldern zeigt das Formular, wie viel davon sie belegen, und **Speichern** bleibt gesperrt, solange sie zusammen zu lang sind.
 
 ## Analyse-Voreinstellungen
 

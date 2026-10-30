@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { pipelineTargetToRun } from './pipelineTarget'
+import { describe, expect, it, vi } from 'vitest'
+import { pipelineTargetToRun, releaseStatus, whileTranscriptionOpen } from './pipelineTarget'
 
 const targets = () => new Map([['t1', 'b1']])
 
@@ -32,5 +32,35 @@ describe('pipelineTargetToRun', () => {
     expect(first).not.toBeNull()
     m.delete('a')
     expect(pipelineTargetToRun(m, 'a', 'completed', true)).toBeNull()
+  })
+})
+
+describe('whileTranscriptionOpen', () => {
+  it('runs the write while the transcription is open and skips it after another was opened', () => {
+    let open: string | null = 't1'
+    const ifOpen = whileTranscriptionOpen('t1', () => open)
+    const write = vi.fn()
+    expect(ifOpen(write)).toBe(true)
+    expect(write).toHaveBeenCalledTimes(1)
+    open = 't2'
+    expect(ifOpen(write)).toBe(false)
+    open = null
+    ifOpen(write)
+    expect(write).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('releaseStatus', () => {
+  const a = { key: 'a' }
+  const b = { key: 'b' }
+  it('clears the status this run set', () => {
+    expect(releaseStatus(a, a)).toBeNull()
+  })
+  it('keeps a status set by another run', () => {
+    expect(releaseStatus(b, a)).toBe(b)
+    expect(releaseStatus(b, null)).toBe(b)
+  })
+  it('leaves an already cleared status cleared', () => {
+    expect(releaseStatus(null, a)).toBeNull()
   })
 })

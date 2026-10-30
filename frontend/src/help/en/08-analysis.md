@@ -63,7 +63,7 @@ Click an entry to expand it.
 3. **Copy result** puts the text on the clipboard. **TXT** and **Markdown** download it, as a file named after the recording with the suffix `_analysis`. The buttons appear above and below the result.
 4. For chapters, key points, decisions and action items, clicking the time makes the player jump to that spot.
 
-The cross that appears on a card when you hover over it removes that item from the result. This is saved immediately and cannot be undone. For the summary this applies to chapters, not to the summary text.
+The cross that appears on a card when you hover over it removes that item from the result after a confirmation prompt. Once you confirm, it is saved immediately and cannot be undone. For the summary this applies to chapters, not to the summary text.
 
 Below the result it says once more what it was generated with.
 
