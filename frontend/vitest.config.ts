@@ -8,6 +8,16 @@ export default mergeConfig(
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],
       include: ['src/**/*.{test,spec}.{ts,tsx}', 'scripts/**/*.test.ts'],
+      coverage: {
+        // `npm run test:coverage` (CI runs it that way). The thresholds sit just
+        // below the current numbers so coverage cannot quietly drop; raise them
+        // as coverage grows.
+        provider: 'v8',
+        include: ['src/**/*.{ts,tsx}'],
+        exclude: ['src/test/**', 'src/main.tsx'],
+        reporter: ['text-summary', 'html'],
+        thresholds: { lines: 78, statements: 77, branches: 73, functions: 77 },
+      },
     },
   }),
 )
