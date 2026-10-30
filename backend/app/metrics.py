@@ -105,6 +105,10 @@ llm_errors_total = _counter(
     "transcription_llm_errors_total", "LLM errors",
     ["provider", "model", "operation"],
 )
+support_assistant_requests_total = _counter(
+    "transcription_support_assistant_requests_total", "Support assistant requests",
+    ["result"],
+)
 llm_tokens_total = _counter(
     "transcription_llm_tokens_total", "LLM tokens consumed",
     ["provider", "model", "operation", "kind"],  # kind: prompt | completion
@@ -318,7 +322,10 @@ def init_label_series() -> None:
         provider = settings.LLM_PROVIDER
         model = settings.LLM_MODEL
         if provider:
-            for operation in ("analysis", "translation", "refinement", "title"):
+            operations = ["analysis", "translation", "refinement", "title"]
+            if settings.ENABLE_SUPPORT_ASSISTANT:
+                operations.append("support")
+            for operation in operations:
                 llm_requests_total.labels(provider, model, operation).inc(0)
                 llm_errors_total.labels(provider, model, operation).inc(0)
                 if llm_duration_seconds is not None:

@@ -57,6 +57,22 @@ def fill_settings(html_text: str, values: Mapping[str, str]) -> str:
     )
 
 
+def fill_settings_text(text: str, values: Mapping[str, str]) -> str:
+    """Like `fill_settings`, without HTML escaping (for plain-text/Markdown output)."""
+    return _SETTING_RE.sub(lambda m: values.get(m.group(1), ""), text)
+
+
+def guide_features(privacy: bool) -> dict[str, bool]:
+    """Feature switches for `<!--tw-feature:X-->` blocks in the guide and the assistant manual."""
+    return {
+        "llm": bool(settings.LLM_PROVIDER),
+        "api_tokens": settings.ENABLE_API_TOKENS,
+        "privacy": privacy,
+        # Sentences with the contact address are dropped when none is configured.
+        "contact": bool(settings.CONTACT_EMAIL),
+    }
+
+
 def load_privacy_notices() -> dict[Lang, str]:
     notices: dict[Lang, str] = {}
     for lang, path in (

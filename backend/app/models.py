@@ -280,6 +280,7 @@ class ConfigResponse(BaseModel):
     default_expiry_hours: int = 72
     archive_expiry_hours: int = 4320
     privacy_notice: bool = False
+    support_assistant_enabled: bool = False
 
 
 # --- Invitations ---
