@@ -2,12 +2,16 @@
 
 Usage (on the host that runs the container, with the assistant enabled):
 
-    docker exec -i transcription python - < backend/scripts/audit_support_assistant.py
-    docker exec -i -e ONLY='SRT|Token' transcription python - < backend/scripts/audit_support_assistant.py
+    docker exec transcription python scripts/audit_support_assistant.py
+    docker exec -e ONLY='SRT|Token' transcription python scripts/audit_support_assistant.py
+
+The script ships in the image at /app/scripts/.
 
 Environment: AUDIT_USER (default "assistant-audit"), AUDIT_EMAIL
 (default "assistant-audit@example.org"), ONLY (regex; only questions matching
-it are asked). Standard library only, so it runs inside the production image.
+it are asked), AUDIT_TRANSCRIPTION_ID (optional; also asks the failure question
+with view "detail" for that transcription, which must belong to AUDIT_USER).
+With INVITATION_MODE=true, AUDIT_USER must be an invited or admin identity. Standard library only, so it runs inside the production image.
 The questions are asked one at a time because the endpoint allows one
 in-flight request per user.
 
@@ -33,6 +37,7 @@ URL = "http://localhost:8000/api/assistant/chat"
 USER = os.environ.get("AUDIT_USER", "assistant-audit")
 EMAIL = os.environ.get("AUDIT_EMAIL", "assistant-audit@example.org")
 ONLY = os.environ.get("ONLY")
+TRANSCRIPTION_ID = os.environ.get("AUDIT_TRANSCRIPTION_ID")
 
 # (lang, question). The comment names the help section that answers it.
 QUESTIONS = [
@@ -69,6 +74,11 @@ QUESTIONS = [
 ]
 
 
+# Asked with the open transcription when AUDIT_TRANSCRIPTION_ID is set; the answer should
+# name the transcription's own error code and say what that code means.
+DETAIL_QUESTION = "Meine Transkription ist fehlgeschlagen, woran liegt das?"
+
+
 def parse_sse(lines):
     """Join the deltas of an SSE stream; return (answer, error_code or None)."""
     answer = []
@@ -92,12 +102,12 @@ def parse_sse(lines):
     return "".join(answer), error
 
 
-def ask(lang, question):
+def ask(lang, question, transcription_id=None):
     body = json.dumps({
         "messages": [{"role": "user", "content": question}],
         "lang": lang,
-        "view": "archive",
-        "transcription_id": None,
+        "view": "detail" if transcription_id else "archive",
+        "transcription_id": transcription_id,
     }).encode()
     req = urllib.request.Request(URL, data=body, method="POST", headers={
         "Content-Type": "application/json",
@@ -124,6 +134,11 @@ def main():
             continue
         answer, error = ask(lang, question)
         print(f"########## {question}")
+        print(f"(error: {error})" if error else answer)
+        print()
+    if TRANSCRIPTION_ID and (not ONLY or re.search(ONLY, DETAIL_QUESTION)):
+        answer, error = ask("de", DETAIL_QUESTION, TRANSCRIPTION_ID)
+        print(f"########## {DETAIL_QUESTION} (detail view, transcription {TRANSCRIPTION_ID})")
         print(f"(error: {error})" if error else answer)
         print()
 

@@ -184,10 +184,18 @@ are never sent. transkribierBAR stores no conversation and does not
 log message content. Personal API tokens cannot use the assistant, and each user
 can have one question in progress at a time.
 
+A request carries the whole manual, so the model needs a context window of at
+least 32k tokens; for Ollama set `OLLAMA_CONTEXT_LENGTH` (or the model's
+`num_ctx`).
+
 After changing the instructions or the help, run
-`docker exec -i transcription python - < backend/scripts/audit_support_assistant.py`
-against a test deployment and read the answers (the grading rules are in the
-script's header).
+`docker exec transcription python scripts/audit_support_assistant.py`
+against a test deployment and read the answers (the script ships in the image at
+`/app/scripts/`; the grading rules are in its header). With
+`INVITATION_MODE=true`, set `AUDIT_USER` to an invited or admin identity
+(`docker exec -e AUDIT_USER=… transcription …`). Set `AUDIT_TRANSCRIPTION_ID`
+to a failed transcription of that user to also ask the failure question about
+it from the detail view.
 
 ## Development
 
