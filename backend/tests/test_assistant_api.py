@@ -191,13 +191,35 @@ async def test_situation_uses_open_transcription(monkeypatch):
 async def test_concurrent_detail_requests_are_not_both_admitted(monkeypatch):
     import asyncio
 
-    use(monkeypatch, FakeProvider())
+    release = asyncio.Event()
 
-    async def slow_situation(user_id, transcription_id):
-        await asyncio.sleep(0.05)
+    class BlockingProvider(FakeProvider):
+        async def stream_chat(self, messages, operation, max_tokens):
+            await release.wait()
+            async for c in super().stream_chat(messages, operation, max_tokens):
+                yield c
+
+    use(monkeypatch, BlockingProvider())
+
+    # Hold both requests inside load_situation until both are there, so
+    # neither has reached the busy check when the other one does.
+    entered = 0
+    both_in = asyncio.Event()
+
+    async def parked_situation(user_id, transcription_id):
+        nonlocal entered
+        entered += 1
+        if entered == 2:
+            both_in.set()
+        await both_in.wait()
         return None
 
-    monkeypatch.setattr(sa, "load_situation", slow_situation)
+    monkeypatch.setattr(sa, "load_situation", parked_situation)
     payload = body(view="detail", transcription_id="t-1")
-    r1, r2 = await asyncio.gather(post(payload), post(payload))
-    assert sorted([r1.status_code, r2.status_code]) == [200, 429]
+    tasks = {asyncio.create_task(post(payload)), asyncio.create_task(post(payload))}
+    # The admitted request stays in its stream until release is set, so the
+    # only one that can finish first is the refused one.
+    done, pending = await asyncio.wait(tasks, timeout=5, return_when=asyncio.FIRST_COMPLETED)
+    release.set()
+    assert [t.result().status_code for t in done] == [429]
+    assert [(await t).status_code for t in pending] == [200]
