@@ -2,13 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useStore } from '../../store'
 import i18n from '../../i18n'
-import { api } from '../../api/client'
+import { api, ApiError } from '../../api/client'
 import { SpeakerMapping } from './SpeakerMapping'
 import type { TranscriptionResult, Utterance } from '../../api/types'
 
-vi.mock('../../api/client', () => ({
-  api: { updateSpeakers: vi.fn() },
-}))
+vi.mock('../../api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../api/client')>()
+  return { ...actual, api: { updateSpeakers: vi.fn() } }
+})
 
 const PLACEHOLDER = 'New name (leave empty to keep)'
 
@@ -25,6 +26,12 @@ function renderOpen() {
   const onClose = vi.fn()
   const utils = render(<SpeakerMapping isOpen onClose={onClose} />)
   return { onClose, ...utils }
+}
+
+function typeFirstName(name: string): HTMLElement {
+  const input = screen.getAllByPlaceholderText(PLACEHOLDER)[0]
+  fireEvent.change(input, { target: { value: name } })
+  return input
 }
 
 const initialState = useStore.getState()
@@ -140,4 +147,47 @@ describe('SpeakerMapping', () => {
     'shows an error when saving the names fails (bug https://github.com/virtUOS/transkribierBAR/issues/245: handleApply has no try/catch, so a failing '
     + 'api.updateSpeakers becomes an unhandled rejection with no feedback — SpeakerMapping.tsx:103)',
   )
+})
+
+describe('SpeakerMapping applying names', () => {
+  beforeEach(() => {
+    setup(['SPEAKER_00', 'SPEAKER_01'])
+  })
+
+  it('shows the server\'s reason when saving fails and keeps the panel open with the typed name', async () => {
+    vi.mocked(api.updateSpeakers).mockRejectedValueOnce(new ApiError(500, 'boom'))
+    const onClose = vi.fn()
+    render(<SpeakerMapping isOpen onClose={onClose} />)
+    const input = typeFirstName('Alice')
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('boom')
+    expect(onClose).not.toHaveBeenCalled()
+    expect(input).toHaveValue('Alice')
+    expect(useStore.getState().speakerMappings).toEqual({})
+
+    vi.mocked(api.updateSpeakers).mockResolvedValueOnce({ status: 'ok' })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(useStore.getState().speakerMappings).toEqual({ SPEAKER_00: 'Alice' })
+  })
+
+  it('shows a general message when saving fails without a server reason', async () => {
+    vi.mocked(api.updateSpeakers).mockRejectedValueOnce(new Error('network'))
+    render(<SpeakerMapping isOpen onClose={vi.fn()} />)
+    typeFirstName('Alice')
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Saving the speaker names failed.')
+  })
+
+  it('does not show an old error after the panel is closed and opened again', async () => {
+    vi.mocked(api.updateSpeakers).mockRejectedValueOnce(new ApiError(500, 'boom'))
+    const { rerender } = render(<SpeakerMapping isOpen onClose={vi.fn()} />)
+    typeFirstName('Alice')
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    await screen.findByRole('alert')
+    rerender(<SpeakerMapping isOpen={false} onClose={vi.fn()} />)
+    rerender(<SpeakerMapping isOpen onClose={vi.fn()} />)
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
 })

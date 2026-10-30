@@ -13,13 +13,15 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.database import init_db, get_db
-from app.routers import config_router, upload, transcription, refinement, analysis, translation, presets, tokens, invitations as invitations_router, public_pages
+from app.routers import config_router, upload, transcription, refinement, analysis, translation, presets, tokens, invitations as invitations_router, assistant as assistant_router, public_pages
 from app.public_pages import load_privacy_notices
 from app.log_redaction import install_token_redaction
 from app.metrics import inc, gauge_set, cleanup_runs_total, cleanup_items_deleted_total, storage_bytes, api_tokens_active, invitations_expired_total, init_label_series, users_total, users_with_transcriptions, users_new
+from app.services import support_assistant
 from app.services.asr import get_asr_backend
 from app.services.audio import has_video_stream
 from app.services.api_tokens import cleanup_stale_tokens, count_active_tokens
+from app.services.token_expiry import send_expiry_reminders
 
 
 install_token_redaction()
@@ -87,7 +89,7 @@ async def fail_interrupted_transcriptions() -> list[str]:
         )
         job_ids = [row["asr_job_id"] for row in await cursor.fetchall()]
         await db.execute(
-            "UPDATE transcriptions SET status = 'failed', error_message = ? "
+            "UPDATE transcriptions SET status = 'failed', error_message = ?, error_code = 'server_restarted' "
             "WHERE status IN ('pending', 'processing')",
             (INTERRUPTED_MESSAGE,),
         )
@@ -233,7 +235,8 @@ async def cleanup_old_files():
                 inc(invitations_expired_total)
             _refresh_storage_gauge()
 
-            # Last, so an unreachable ASR host only delays the remote deletes.
+            # After the local steps, so an unreachable ASR host only delays the
+            # remote deletes and the reminders.
             if asr_job_ids:
                 asr_backend = get_asr_backend()
                 for job_id in asr_job_ids:
@@ -242,11 +245,25 @@ async def cleanup_old_files():
             inc(cleanup_runs_total, "failed")
             print(f"Cleanup error: {e}")
 
+        # Last and on their own, so a slow relay delays nothing else and an
+        # error in them neither skips a cleanup step nor fails the run.
+        try:
+            async with get_db() as db:
+                reminders = await send_expiry_reminders(db)
+            if any(reminders.values()):
+                print("Token expiry reminders: " + ", ".join(f"{k}={v}" for k, v in reminders.items()))
+        except Exception as e:
+            print(f"Token expiry reminder error: {e}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     os.makedirs(settings.TEMP_PATH, exist_ok=True)
     public_pages.NOTICES = load_privacy_notices()
+    if settings.ENABLE_SUPPORT_ASSISTANT:
+        support_assistant.CORPORA = support_assistant.load_corpora(
+            settings.STATIC_DIR, bool(public_pages.NOTICES)
+        )
     await init_db(settings.db_path)
     interrupted_job_ids = await fail_interrupted_transcriptions()
     await clear_interrupted_llm_steps()
@@ -303,6 +320,7 @@ if settings.ENABLE_API_TOKENS:
 # dependency returns 404 when INVITATION_MODE=false. This avoids coupling the
 # mount to a startup-time flag that tests reload.
 app.include_router(invitations_router.router)
+app.include_router(assistant_router.router)
 
 
 def safe_static_file(static_dir: str, rel: str) -> str | None:

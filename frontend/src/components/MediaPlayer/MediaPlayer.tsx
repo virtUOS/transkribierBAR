@@ -1,11 +1,15 @@
 import { useEffect, useRef, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import videojs from 'video.js'
+import videojsGerman from 'video.js/dist/lang/de.json'
 import 'video.js/dist/video-js.css'
 import { useStore } from '../../store'
 import { api } from '../../api/client'
 import { formatVttTime } from '../../utils/format'
 import type { Utterance } from '../../api/types'
+
+// The player's own labels (Play, Mute, …) in German; English is built in
+videojs.addLanguage('de', videojsGerman)
 
 const mimeTypes: Record<string, string> = {
   mp4: 'video/mp4',
@@ -39,7 +43,8 @@ interface Props {
 }
 
 export function MediaPlayer({ fileId, mediaType, hasVideo, onCollapsedChange }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const language = i18n.resolvedLanguage
   const containerRef = useRef<HTMLDivElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const playerRef = useRef<ReturnType<typeof videojs> | null>(null)
@@ -87,6 +92,7 @@ export function MediaPlayer({ fileId, mediaType, hasVideo, onCollapsedChange }: 
     videoRef.current = videoEl
 
     const player = videojs(videoEl, {
+      language: i18n.resolvedLanguage,
       controls: true,
       responsive: true,
       fluid: true,
@@ -134,7 +140,12 @@ export function MediaPlayer({ fileId, mediaType, hasVideo, onCollapsedChange }: 
         blobUrlRef.current = null
       }
     }
-  }, [fileId, mediaType, hasVideo, mediaUrl, setCurrentTime])
+  }, [fileId, mediaType, hasVideo, mediaUrl, setCurrentTime, i18n])
+
+  // A language switch while the player is open relabels its controls
+  useEffect(() => {
+    if (language) playerRef.current?.language(language)
+  }, [language])
 
   // Dispose player on actual component unmount
   useEffect(() => {
@@ -178,14 +189,15 @@ export function MediaPlayer({ fileId, mediaType, hasVideo, onCollapsedChange }: 
       const trackEl = player.addRemoteTextTrack({
         kind: 'captions',
         srclang: 'auto',
-        label: 'Subtitles',
+        // Named when the track is built: rebuilding it on a language switch would turn subtitles off
+        label: i18n.t('player.subtitles'),
         src: url,
         default: false,
       }, false)
 
       trackRef.current = trackEl as unknown as HTMLTrackElement
     })
-  }, [vttContent, hasVideo])
+  }, [vttContent, hasVideo, i18n])
 
   useEffect(() => {
     if (seekTo !== null && playerRef.current) {

@@ -13,19 +13,60 @@ jobs:
       contents: read
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      # Dependabot bumps the base image on its own; the PR stays red until
+      # backend/.python-version (and with it CI) moves to the same version.
+      - name: Check that the Dockerfile uses the same Python
+        run: |
+          want=$(cut -d. -f1,2 backend/.python-version)
+          have=$(sed -n 's/^FROM python:\([0-9.]*\)-.*/\1/p' Dockerfile)
+          if [ "$have" != "$want" ]; then
+            echo "::error file=Dockerfile::Dockerfile uses Python $have, backend/.python-version says $want"
+            exit 1
+          fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version-file: backend/.python-version
           cache: pip
           cache-dependency-path: backend/requirements-dev.txt
 
-      - name: Install ffmpeg
+      # The runner's apt mirror sometimes serves the ~50 MB of ffmpeg packages
+      # at tens of kB/s, so they come from the Actions cache instead (#283).
+      # Package file names carry their versions: an Ubuntu update changes the key.
+      - name: Resolve ffmpeg packages
+        id: ffmpeg
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg
+          prefix="ffmpeg-debs-$(. /etc/os-release; echo "$VERSION_ID")-"
+          hash=$(sudo apt-get install --print-uris -qq --no-install-recommends ffmpeg | awk '{print $2}' | sort | sha256sum | cut -c1-16)
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          echo "key=$prefix$hash" >> "$GITHUB_OUTPUT"
+
+      - name: Restore ffmpeg packages
+        id: ffmpeg-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/ffmpeg-debs
+          key: ${{ steps.ffmpeg.outputs.key }}
+          restore-keys: ${{ steps.ffmpeg.outputs.prefix }}
+
+      - name: Install ffmpeg
+        run: |
+          mkdir -p ~/ffmpeg-debs/partial
+          sudo apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$HOME/ffmpeg-debs" ffmpeg
+          # Drop superseded versions; apt leaves partial/ and its lock unreadable to the cache step
+          sudo apt-get -o Dir::Cache::Archives="$HOME/ffmpeg-debs" autoclean
+          sudo chown -R "$(id -u):$(id -g)" ~/ffmpeg-debs
+
+      - name: Save ffmpeg packages
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/ffmpeg-debs
+          key: ${{ steps.ffmpeg.outputs.key }}
 
       - name: Install dependencies
         working-directory: backend
@@ -33,7 +74,5 @@ jobs:
 
       - name: Test
         working-directory: backend
-        env:
-          # The OpenAI client refuses an empty key; the tests never use it.
-          LLM_API_KEY: dummy
-        run: pytest
+        # Fails below the coverage floor in backend/.coveragerc.
+        run: pytest --cov

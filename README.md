@@ -42,8 +42,8 @@
 The application uses a decoupled frontend/backend architecture:
 
 - **Frontend**: React 19 + TypeScript SPA built with Vite, using Zustand for state management and Tailwind CSS for styling.
-- **Backend**: FastAPI (Python 3.12) with async SQLite database, serving the built frontend as static files.
-- **ASR**: Pluggable speech recognition backends — [MurmurAI](https://github.com/namastexlabs/murmurai) or WhisperX. With MurmurAI, the app deletes the server-side copy of each transcript as soon as it has stored the result, so transcripts on the ASR server do not outlive the app's own retention.
+- **Backend**: FastAPI (Python, version in `backend/.python-version`) with async SQLite database, serving the built frontend as static files.
+- **ASR**: Pluggable speech recognition backends — [whisperx-api-server](https://github.com/Nyralei/whisperx-api-server) (WhisperX 3.8, one synchronous request per job; with `RESULT_STORE__ENABLED=false` on the server it keeps neither audio nor transcript once it has answered; the server's default keeps results for an hour) or [MurmurAI](https://github.com/namastexlabs/murmurai) (asynchronous API; the app deletes the server-side copy of each transcript as soon as it has stored the result, so transcripts on the ASR server do not outlive the app's own retention).
 - **LLM**: Pluggable LLM providers — OpenAI-compatible API (OpenAI, vLLM, etc.) or Ollama.
 - **Deployment**: Multi-stage Docker build combining both frontend and backend into a single image.
 
@@ -51,18 +51,18 @@ The application uses a decoupled frontend/backend architecture:
 
 You need to set up an ASR backend to work with this app. Supported options:
 
-- [MurmurAI API server](https://github.com/namastexlabs/murmurai) (remote API)
-- [WhisperX API server](https://github.com/Nyralei/whisperx-api-server) (remote API)
+- [whisperx-api-server](https://github.com/Nyralei/whisperx-api-server) 1.4.1.0 or newer (remote API, ASR_BACKEND=whisperx)
+- [MurmurAI API server](https://github.com/namastexlabs/murmurai) (remote API, ASR_BACKEND=murmurai)
 
 Copy `.env.example` to `.env` and configure your environment variables:
 
 ```bash
 # ASR Configuration
 ASR_BACKEND=murmurai              # or: whisperx
-ASR_URL=http://localhost:8880
-ASR_API_KEY=                      # required for MurmurAI only
+ASR_URL=http://localhost:8880         # MurmurAI's default port; whisperx-api-server listens on :8000
+ASR_API_KEY=                      # sent as "Authorization: Bearer" to whisperx-api-server, raw to MurmurAI; empty if the server has no key
 ASR_MAX_CONCURRENT=3              # max transcription jobs sent to the ASR backend at once
-ASR_JOB_TIMEOUT_MIN=1800          # fail a job stuck in "processing" after this many seconds
+ASR_JOB_TIMEOUT_MIN=1800          # fail a job stuck in "processing" after this many seconds (for whisperx also the floor of each request's HTTP read timeout)
 ASR_JOB_TIMEOUT_FACTOR=10         # ...or after audio_duration x this, whichever is longer
 
 # ASR Model Configuration
@@ -74,6 +74,7 @@ LLM_PROVIDER=openai               # or: ollama (openai works with any OpenAI-com
 LLM_MODEL=gpt-4o
 LLM_API_KEY=                      # required for OpenAI / OpenAI-compatible APIs
 LLM_BASE_URL=                     # for custom endpoints (e.g., vLLM, Ollama: http://localhost:11434)
+ENABLE_SUPPORT_ASSISTANT=false    # optional help assistant in the help drawer; needs LLM_PROVIDER (see "Support assistant")
 
 # UI Configuration
 POPULAR_LANGUAGES=de,en,es,fr       # languages pinned at top of dropdowns (comma-separated codes)
@@ -166,11 +167,41 @@ Tokens never carry LLM capabilities beyond what the deployment has configured:
 if `LLM_PROVIDER` is unset, analysis/translation/refinement endpoints return
 503 regardless of authentication method.
 
+## Support assistant
+
+With `ENABLE_SUPPORT_ASSISTANT=true` the help drawer gets an **Assistant** tab
+where users ask questions about using the app. It needs an LLM
+(`LLM_PROVIDER` and its settings) and is off by default. It answers from the
+in-app help only: the build turns the help markdown into `dist/assistant/<lang>.md`,
+which the backend loads at startup.
+
+The question, the earlier messages of that chat, the user manual and a few facts
+about the situation are sent to the configured LLM: the current page, the
+interface language, the contact address and, for an open transcription of the
+user's own, its status, error code and message, requested and detected language,
+and speech recognition model. Transcript text, files, analyses and translations
+are never sent. transkribierBAR stores no conversation and does not
+log message content. Personal API tokens cannot use the assistant, and each user
+can have one question in progress at a time.
+
+A request carries the whole manual, so the model needs a context window of at
+least 32k tokens; for Ollama set `OLLAMA_CONTEXT_LENGTH` (or the model's
+`num_ctx`).
+
+After changing the instructions or the help, run
+`docker exec transcription python scripts/audit_support_assistant.py`
+against a test deployment and read the answers (the script ships in the image at
+`/app/scripts/`; the grading rules are in its header). With
+`INVITATION_MODE=true`, set `AUDIT_USER` to an invited or admin identity
+(`docker exec -e AUDIT_USER=… transcription …`). Set `AUDIT_TRANSCRIPTION_ID`
+to a failed transcription of that user to also ask the failure question about
+it from the detail view.
+
 ## Development
 
 ### Backend
 
-Install Python dependencies (Python 3.12), run the FastAPI server, and run the test suite:
+Install Python dependencies (the version in `backend/.python-version`), run the FastAPI server, and run the test suite:
 
 ```bash
 cd backend
@@ -192,8 +223,8 @@ Edit the `.in` files, never the `.txt` files. Then regenerate both lock files
 from `backend/`:
 
 ```bash
-uv pip compile requirements.in --universal --python-version 3.12 --generate-hashes -o requirements.txt
-uv pip compile requirements-dev.in --universal --python-version 3.12 --generate-hashes -o requirements-dev.txt
+uv pip compile requirements.in --universal --python-version "$(cat .python-version)" --generate-hashes -o requirements.txt
+uv pip compile requirements-dev.in --universal --python-version "$(cat .python-version)" --generate-hashes -o requirements-dev.txt
 ```
 
 Existing pins are kept unless a change needs a new one. Add `--upgrade` (or
@@ -259,7 +290,7 @@ The application includes comprehensive Prometheus metrics for monitoring usage a
 - **WebSocket**:
   - `transcription_websocket_connections_active` — Active WebSocket connections
   - `transcription_websocket_connections_total` — Total WebSocket connections
-  - `transcription_websocket_messages_sent_total` — Messages sent to clients by type (`status`/`error`)
+  - `transcription_websocket_messages_sent_total` — Messages sent to clients by type (`status`/`error`/`title`)
   - `transcription_websocket_disconnects_total` — Disconnects by reason (`client_disconnect`, `auth_missing`, `not_found`, `completed`, `failed`, `not_found_record`, `error`)
 
 - **Storage**:

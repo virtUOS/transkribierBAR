@@ -38,11 +38,6 @@ describe('SubmittedSummaryCard', () => {
     expect(screen.getByText('3.0 MB · large-v3 · xx · no speakers')).toBeInTheDocument()
   })
 
-  it('shows a single speaker count when min equals max', () => {
-    render(<SubmittedSummaryCard summary={summary({ detectSpeakers: true, minSpeakers: 1, maxSpeakers: 1 })} />)
-    expect(screen.getByText('3.0 MB · large-v3 · auto · 1 speaker')).toBeInTheDocument()
-  })
-
   it.todo(
     'pluralises an exact speaker count above one (bug https://github.com/virtUOS/transkribierBAR/issues/249: min=max=3 renders "3 speaker" / "3 Person"; '
     + 'transcription.summary.speakersOne has no _other plural form — SubmittedSummaryCard.tsx:30, en.json/de.json:88)',
@@ -51,5 +46,19 @@ describe('SubmittedSummaryCard', () => {
   it('names the bundle the settings came from', () => {
     render(<SubmittedSummaryCard summary={summary({ bundleName: 'Lecture' })} />)
     expect(screen.getByText('via "Lecture" bundle')).toBeInTheDocument()
+  })
+})
+
+describe('SubmittedSummaryCard speaker count', () => {
+  it.each([
+    ['en', 1, '1 speaker'],
+    ['en', 3, '3 speakers'],
+    ['de', 1, '1 Person'],
+    ['de', 3, '3 Personen'],
+  ])('%s with %i', async (lang, count, expected) => {
+    await i18n.changeLanguage(lang)
+    render(<SubmittedSummaryCard summary={summary({ detectSpeakers: true, minSpeakers: count, maxSpeakers: count })} />)
+    const text = screen.getByText(new RegExp(expected))
+    expect(text.textContent).toMatch(new RegExp(`${expected}(?!\\w)`))
   })
 })

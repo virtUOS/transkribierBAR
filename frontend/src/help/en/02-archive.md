@@ -7,7 +7,7 @@ After signing in you see the overview. Under **My Transcriptions** it lists all 
 ![The overview with two transcriptions; numbered markers highlight the parts of a row](shots/archive.png)
 
 1. The title with the filename below it, or only the filename if there is no title. The pencil icons next to them rename them (see "Renaming").
-2. The model, the status, the creation date and, if the transcription is archived, a shield icon. The status is green `completed`, yellow `pending` or `processing` (waiting or running), or red `failed`.
+2. The model, the status, the creation date and, if the transcription is archived, a shield icon. The status is green "Completed", yellow "Pending" or "Processing" (waiting or running), or red "Failed".
 
 Click a row to open the transcription. After transcribing, transkribierBAR creates the title automatically with the language model. If that fails, the row shows only the filename.
 

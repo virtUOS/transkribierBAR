@@ -22,7 +22,7 @@ Ihre Änderungen gelten zunächst nur in Ihrem Browser, bis Sie sie speichern (s
 
 ## Zeiten bearbeiten
 
-Mit dem Stiftsymbol neben **Start** oder **Ende** ändern Sie die Zeit. Das Feld zeigt sie als `HH:MM:SS`. Geben Sie immer alle drei Teile ein, zum Beispiel `00:01:30`. Mit der Eingabetaste oder einem Klick außerhalb übernehmen Sie die Zeit. Das Feld zeigt ganze Sekunden. Beim Übernehmen fallen die Bruchteile einer Sekunde weg, auch wenn Sie die Zeit nicht geändert haben.
+Mit dem Stiftsymbol neben **Start** oder **Ende** ändern Sie die Zeit. Die Tabelle zeigt ganze Sekunden, das Feld zeigt die Zeit mit Millisekunden, zum Beispiel `00:01:30.500`. Sie können auch nur Minuten und Sekunden (`01:30`) oder nur Sekunden (`90`) eingeben. Bruchteile einer Sekunde stehen nach einem Punkt oder einem Komma, zum Beispiel `12,5`. Mit der Eingabetaste oder einem Klick außerhalb übernehmen Sie die Zeit. Ist die Zeit unverändert oder keine gültige Zeit, bleibt die Zeile, wie sie war.
 
 Überschneidet die neue Zeit benachbarte Zeilen, passt der Editor diese an: Ein neuer Start verkürzt das Ende der vorherigen Zeilen, ein neues Ende verschiebt den Start der folgenden. Vorher nennt eine Rückfrage die Zahl der betroffenen Zeilen. Wenn Sie sie abbrechen, bleibt alles unverändert. Liegt der neue Start nach dem Ende der Zeile, rückt auch das Ende nach. Entsprechend wird auch der Start vorgezogen, wenn das neue Ende davor liegt.
 
@@ -52,7 +52,11 @@ Unter dem Player lädt **Aufnahme herunterladen** die Aufnahme herunter. Bei Vid
 
 ## Speichern
 
-Sobald Sie etwas geändert haben, erscheinen über der Tabelle die Schaltflächen **Änderungen speichern** und **Original wiederherstellen**. Speichern ersetzt die bisher gespeicherte Fassung auf dem Server. **Original wiederherstellen** verwirft nach einer Rückfrage alle Änderungen seit dem letzten Speichern und lädt die gespeicherte Fassung neu. Eine frühere Fassung hebt transkribierBAR nach dem Speichern nicht auf.
+Sobald Sie etwas geändert haben, erscheinen über der Tabelle die Schaltflächen **Änderungen verwerfen** und **Änderungen speichern**. Speichern ersetzt die bisher gespeicherte Fassung auf dem Server. **Änderungen verwerfen** verwirft nach einer Rückfrage alle Änderungen seit dem letzten Speichern und lädt die gespeicherte Fassung neu.
+
+Außerdem hebt transkribierBAR die Transkription so auf, wie die Spracherkennung sie geliefert hat. Speichern ändert dieses Original nie. Sobald die gespeicherte Fassung davon abweicht, erscheint die Schaltfläche **Original wiederherstellen**. Nach einer Rückfrage lädt sie dieses Original in den Editor: Text, Zeiten und sprechende Person jeder Zeile. Ist gerade die Ansicht **Verfeinert** oder **Übersetzt** zu sehen, wechselt der Editor zu **Original**. Bis Sie auf **Änderungen speichern** klicken, ist das wiederhergestellte Original eine ungespeicherte Änderung wie jede andere: Die gespeicherte Fassung bleibt auf dem Server, und **Änderungen verwerfen** holt sie zurück. Die Namen aus dem Bereich **Namen der Sprechenden** bleiben. Auch eine Verfeinerung, Übersetzung oder Analyse bleibt erhalten. Ob sie danach als veraltet gilt, hängt wie nach jeder anderen Änderung vom gespeicherten Text ab. Das Original wird zusammen mit der Transkription gelöscht.
+
+Für eine Transkription, die es schon gab, bevor transkribierBAR begann, das Original aufzuheben, gilt als Original die Fassung, die zu diesem Zeitpunkt gespeichert war, einschließlich früher gespeicherter Änderungen.
 
 Wechseln Sie zu einem Format-Reiter wie **SRT**, bleiben Ihre Änderungen erhalten, und das Format zeigt sie bereits.
 
@@ -62,4 +66,4 @@ Wechseln Sie zu einem Format-Reiter wie **SRT**, bleiben Ihre Änderungen erhalt
 
 Sind die KI-Funktionen auf diesem Server eingerichtet, bietet der Editor über der Tabelle die Schaltflächen **Mit LLM verfeinern** und **Übersetzen** an, solange es noch keine Verfeinerung beziehungsweise Übersetzung gibt. Eine Verfeinerung und eine Übersetzung erscheinen neben dem Original. Mit den Schaltflächen **Original**, **Verfeinert** und **Übersetzt** wechseln Sie zwischen ihnen. Die Ansicht **Verfeinert** und die Ansicht **Übersetzt** sind schreibgeschützt: Die Symbole zum Bearbeiten fehlen dort, Änderungen gelten nur im Original. Mit **Verfeinerung löschen** und **Übersetzung löschen** entfernen Sie die jeweilige Fassung nach einer Rückfrage.
 
-In der Ansicht **Verfeinert** nennt **Zusammenfassung der Änderungen**, was das Sprachmodell geändert hat. Geänderte Zeilen tragen einen Punkt neben der Zeilennummer. Ein Klick darauf zeigt Original und verfeinerten Text nebeneinander (nur auf größeren Bildschirmen). Wie beide Funktionen arbeiten, steht in den Abschnitten „Verfeinerung“ und „Übersetzung“.
+In der Ansicht **Verfeinert** nennt **Zusammenfassung der Änderungen**, was das Sprachmodell geändert hat. Geänderte Zeilen haben auf jeder Bildschirmgröße die Schaltfläche **Vergleichen** neben dem Text. Sie zeigt Original und verfeinerten Text nebeneinander unter der Zeile; ein erneuter Klick schließt den Vergleich. Auf größeren Bildschirmen tragen geänderte Zeilen außerdem einen Punkt neben der Zeilennummer. Wie beide Funktionen arbeiten, steht in den Abschnitten „Verfeinerung“ und „Übersetzung“.

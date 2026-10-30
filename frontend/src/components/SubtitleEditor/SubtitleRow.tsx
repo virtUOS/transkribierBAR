@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect, forwardRef } from 'react'
+import { useState, useRef, useEffect, useId, forwardRef } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from '../../store'
-import { formatTime } from '../../utils/format'
+import { formatTime, formatTimeMs, parseTimestamp } from '../../utils/format'
 import type { Utterance } from '../../api/types'
 
 function highlightText(text: string, query: string): ReactNode {
@@ -71,6 +71,7 @@ export const SubtitleRow = forwardRef<HTMLTableRowElement, Props>(function Subti
   const setSeekTo = useStore((s) => s.setSeekTo)
   const [editValue, setEditValue] = useState('')
   const [showDiff, setShowDiff] = useState(false)
+  const diffId = useId()
   const [inlineText, setInlineText] = useState(utterance.text)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -103,8 +104,8 @@ export const SubtitleRow = forwardRef<HTMLTableRowElement, Props>(function Subti
   if (editingField !== prevEditingField) {
     setPrevEditingField(editingField)
     if (editingField && editingField !== 'text') {
-      if (editingField === 'start') setEditValue(formatTime(utterance.start))
-      else if (editingField === 'end') setEditValue(formatTime(utterance.end))
+      if (editingField === 'start') setEditValue(formatTimeMs(utterance.start))
+      else if (editingField === 'end') setEditValue(formatTimeMs(utterance.end))
       else if (editingField === 'speaker') setEditValue(speakerDisplay)
     }
   }
@@ -144,10 +145,13 @@ export const SubtitleRow = forwardRef<HTMLTableRowElement, Props>(function Subti
 
   const commitEdit = (field: keyof Utterance) => {
     if (field === 'start' || field === 'end') {
-      const parts = editValue.split(':').map(Number)
-      const ms = ((parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0)) * 1000
-      onUpdate(index, field, ms)
+      // Input that is not a time, or the same time, leaves the row as it was.
+      const ms = parseTimestamp(editValue)
+      if (ms !== null && ms !== utterance[field]) onUpdate(index, field, ms)
     } else {
+      // The field opens with the display name, so leaving it unchanged must not
+      // write that name over the speaker ID.
+      if (field === 'speaker' && editValue === speakerDisplay) return
       onUpdate(index, field, editValue)
     }
   }
@@ -174,16 +178,11 @@ export const SubtitleRow = forwardRef<HTMLTableRowElement, Props>(function Subti
     )
   }
 
-  const handleRowClick = () => {
-    if (isChanged) setShowDiff(d => !d)
-  }
-
   return (
     <>
       <tr
         ref={ref}
-        onClick={handleRowClick}
-        className={`group block sm:table-row border-b border-gray-700 text-xs ${isActive ? 'bg-blue-900/30' : 'hover:bg-gray-800'} ${isContext ? 'opacity-50' : ''} ${isChanged ? 'border-l-2 border-l-amber-500' : isUnrefined ? 'border-l-2 border-dashed border-l-gray-500' : ''} ${isChanged ? 'cursor-pointer' : ''}`}
+        className={`group block sm:table-row border-b border-gray-700 text-xs ${isActive ? 'bg-blue-900/30' : 'hover:bg-gray-800'} ${isContext ? 'opacity-50' : ''} ${isChanged ? 'border-l-2 border-l-amber-500' : isUnrefined ? 'border-l-2 border-dashed border-l-gray-500' : ''}`}
       >
         <td data-help="row-number" className="hidden sm:table-cell px-3 py-2 text-gray-500">
           <span className="inline-flex items-center gap-0.5">
@@ -216,7 +215,7 @@ export const SubtitleRow = forwardRef<HTMLTableRowElement, Props>(function Subti
             {renderCell('start', formatTime(utterance.start))}
             {!readOnly && editingField !== 'start' && (
               <button
-                onClick={(e) => { e.stopPropagation(); cancelSeek(); startEdit('start', formatTime(utterance.start)) }}
+                onClick={(e) => { e.stopPropagation(); cancelSeek(); startEdit('start', formatTimeMs(utterance.start)) }}
                 className="opacity-60 hover:opacity-100 transition-opacity text-gray-500 hover:text-blue-400 shrink-0"
                 title={t('editor.editTimestamp')}
               >
@@ -232,7 +231,7 @@ export const SubtitleRow = forwardRef<HTMLTableRowElement, Props>(function Subti
             {renderCell('end', formatTime(utterance.end))}
             {!readOnly && editingField !== 'end' && (
               <button
-                onClick={(e) => { e.stopPropagation(); cancelSeek(); startEdit('end', formatTime(utterance.end)) }}
+                onClick={(e) => { e.stopPropagation(); cancelSeek(); startEdit('end', formatTimeMs(utterance.end)) }}
                 className="opacity-60 hover:opacity-100 transition-opacity text-gray-500 hover:text-blue-400 shrink-0"
                 title={t('editor.editTimestamp')}
               >
@@ -305,6 +304,24 @@ export const SubtitleRow = forwardRef<HTMLTableRowElement, Props>(function Subti
                   ? highlightText(utterance.text, highlightTerms)
                   : utterance.text}
               </span>
+              {isChanged && originalText !== undefined && (
+                <button
+                  type="button"
+                  data-help="row-compare"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    cancelSeek()
+                    setShowDiff(d => !d)
+                  }}
+                  aria-expanded={showDiff}
+                  aria-controls={diffId}
+                  aria-label={t('editor.compareWithOriginal')}
+                  title={t('editor.compareWithOriginal')}
+                  className="shrink-0 mt-0.5 rounded border border-amber-700/50 px-1.5 py-0.5 text-amber-400 hover:bg-amber-900/30 aria-expanded:bg-amber-900/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500"
+                >
+                  {t('editor.compare')}
+                </button>
+              )}
               {!readOnly && (
                 <>
                   <button
@@ -363,8 +380,8 @@ export const SubtitleRow = forwardRef<HTMLTableRowElement, Props>(function Subti
           )}
         </td>
       </tr>
-      {showDiff && originalText && (
-        <tr data-help="row-diff" className="bg-gray-800/50">
+      {isChanged && showDiff && originalText !== undefined && (
+        <tr id={diffId} data-help="row-diff" className="bg-gray-800/50">
           <td colSpan={5} className="px-3 py-2">
             <div className="flex gap-4 text-xs">
               <div className="flex-1">

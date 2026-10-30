@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useStore } from '../../store'
 import i18n from '../../i18n'
 import { api, ApiError } from '../../api/client'
@@ -204,15 +204,6 @@ describe('AnalysisView — generation form', () => {
     })))
   })
 
-  it('analyses the refined text by default when a refinement exists, or the original on request', async () => {
-    vi.mocked(api.generateAnalysis).mockResolvedValue({ id: 'new' })
-    setup({ refinedUtterances: [] })
-    await ready()
-    fireEvent.click(screen.getByRole('button', { name: 'Original' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Generate' }))
-    await waitFor(() => expect(api.generateAnalysis).toHaveBeenCalledWith('t1', expect.objectContaining({ source: 'original' })))
-  })
-
   it.each([
     [new ApiError(422, 'too long'), "The analysis reached the language model's output limit before it was complete. Try a more focused prompt."],
     [new ApiError(502, 'bad', 'malformed_reply'), 'The language model returned a malformed response. Please try again.'],
@@ -241,6 +232,87 @@ describe('AnalysisView — generation form', () => {
     await waitFor(() => expect(api.generateAnalysis).toHaveBeenCalledWith('t1', expect.objectContaining({
       template: 'agenda', custom_prompt: 'Custom agenda prompt', language: 'fr', agenda: 'Item A',
     })))
+  })
+})
+
+describe('AnalysisView — generation settings', () => {
+  const utterance = { start: 0, end: 1000, text: 'Hello', speaker: 'SPEAKER_00' }
+  const bundlePreset = {
+    id: 'ap1', name: 'German summary', template: 'summary', custom_prompt: null, language: 'de',
+    chapter_hints: null, agenda: null, created_at: null, updated_at: null,
+  }
+  const bundle = {
+    id: 'b1', name: 'Bundle', transcription_preset_id: null, analysis_preset_id: 'ap1',
+    refinement_preset_id: null, translate_language: null, is_default: false, created_at: null, updated_at: null,
+  }
+
+  // An English transcript, so a German output language can only come from the bundle.
+  function setupRefined(state: Record<string, unknown> = {}) {
+    return setup({
+      transcriptionResult: { id: 't1', utterances: [], language: 'en' } as never,
+      refinedUtterances: [utterance],
+      ...state,
+    })
+  }
+
+  beforeEach(() => {
+    vi.mocked(api.generateAnalysis).mockResolvedValue({ id: 'an2', template: 'summary', language: 'en' })
+  })
+
+  it('analyzes the original when the person chooses it', async () => {
+    setupRefined()
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'Original' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }))
+
+    await waitFor(() => expect(api.generateAnalysis).toHaveBeenCalled())
+    expect(api.generateAnalysis).toHaveBeenCalledWith('t1', expect.objectContaining({ source: 'original' }))
+  })
+
+  it('goes back to the refined text when a new refinement arrives', async () => {
+    setupRefined()
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'Original' }))
+    act(() => useStore.setState({ refinedUtterances: [{ ...utterance, text: 'Hello again' }] }))
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }))
+
+    await waitFor(() => expect(api.generateAnalysis).toHaveBeenCalled())
+    expect(api.generateAnalysis).toHaveBeenCalledWith('t1', expect.objectContaining({ source: 'refined' }))
+  })
+
+  it('starts from the active bundle\'s analysis preset', async () => {
+    setupRefined({ analysisPresets: [bundlePreset], bundles: [bundle], activeBundleId: 'b1' })
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }))
+
+    await waitFor(() => expect(api.generateAnalysis).toHaveBeenCalled())
+    expect(api.generateAnalysis).toHaveBeenCalledWith('t1', expect.objectContaining({ template: 'summary', language: 'de' }))
+  })
+
+  it('keeps the bundle preset\'s template when the template list arrives', async () => {
+    setupRefined({
+      analysisPresets: [{ ...bundlePreset, template: 'agenda', agenda: 'Item 1' }],
+      bundles: [bundle],
+      activeBundleId: 'b1',
+    })
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }))
+
+    await waitFor(() => expect(api.generateAnalysis).toHaveBeenCalled())
+    expect(api.generateAnalysis).toHaveBeenCalledWith('t1', expect.objectContaining({ template: 'agenda', agenda: 'Item 1' }))
+  })
+
+  it('keeps a preset saved by hand selected while a bundle is active', async () => {
+    vi.mocked(api.createAnalysisPreset).mockResolvedValue({ ...bundlePreset, id: 'ap2', name: 'Mine' })
+    setupRefined({ analysisPresets: [bundlePreset], bundles: [bundle], activeBundleId: 'b1' })
+    await ready()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save as preset' }))
+    fireEvent.change(screen.getByPlaceholderText('Preset name'), { target: { value: 'Mine' } })
+    fireEvent.click(screen.getByRole('button', { name: '✓' }))
+
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Mine' })).toBeInTheDocument())
+    expect((screen.getByRole('option', { name: 'Mine' }).closest('select') as HTMLSelectElement).value).toBe('ap2')
   })
 })
 
@@ -405,6 +477,17 @@ describe('AnalysisView — existing analyses', () => {
     expect(api.deleteAnalysisItem).toHaveBeenCalledWith('t1', 'a1', 'action_items', 0)
   })
 
+  it('does not remove an item when the confirmation is cancelled', async () => {
+    confirmSpy.mockReturnValue(false)
+    vi.mocked(api.getAnalysis).mockResolvedValue(summaryResult)
+    await setupWith([item()])
+    fireEvent.click(screen.getByText('Summary with chapters'))
+    fireEvent.click((await screen.findAllByTitle('Remove chapter'))[0])
+
+    expect(confirmSpy).toHaveBeenCalledWith('Remove this item from the analysis?')
+    expect(api.deleteAnalysisItem).not.toHaveBeenCalled()
+  })
+
   it('deletes an analysis after confirmation', async () => {
     vi.mocked(api.deleteAnalysis).mockResolvedValue(undefined)
     await setupWith([item(), item({ id: 'a2', template: 'protocol' })])
@@ -419,6 +502,25 @@ describe('AnalysisView — existing analyses', () => {
     await setupWith([item()])
     fireEvent.click(screen.getByTitle('Delete'))
     expect(api.deleteAnalysis).not.toHaveBeenCalled()
+  })
+
+  it('shows the server detail when the delete fails and keeps the analysis', async () => {
+    vi.mocked(api.deleteAnalysis).mockRejectedValue(new ApiError(500, 'Server said no'))
+    await setupWith([item()])
+
+    fireEvent.click(screen.getByTitle('Delete'))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Server said no')
+    expect(useStore.getState().analyses).toHaveLength(1)
+  })
+
+  it('shows a generic message when the delete fails without a server detail', async () => {
+    vi.mocked(api.deleteAnalysis).mockRejectedValue(new TypeError('Failed to fetch'))
+    await setupWith([item()])
+
+    fireEvent.click(screen.getByTitle('Delete'))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Deleting the analysis failed.')
   })
 
   it.todo(

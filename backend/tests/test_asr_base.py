@@ -21,3 +21,11 @@ async def test_cleanup_defaults_to_noop():
             raise NotImplementedError
 
     assert await Minimal().cleanup("job") is None
+
+
+def test_transcription_settings_carries_timeout_and_request_id():
+    from app.services.asr.base import TranscriptionSettings
+    assert TranscriptionSettings().job_timeout is None
+    assert TranscriptionSettings().request_id is None
+    ts = TranscriptionSettings(job_timeout=3600.0, request_id="txn-1")
+    assert (ts.job_timeout, ts.request_id) == (3600.0, "txn-1")

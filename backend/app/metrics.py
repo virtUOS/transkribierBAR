@@ -105,6 +105,10 @@ llm_errors_total = _counter(
     "transcription_llm_errors_total", "LLM errors",
     ["provider", "model", "operation"],
 )
+support_assistant_requests_total = _counter(
+    "transcription_support_assistant_requests_total", "Support assistant requests",
+    ["result"],
+)
 llm_tokens_total = _counter(
     "transcription_llm_tokens_total", "LLM tokens consumed",
     ["provider", "model", "operation", "kind"],  # kind: prompt | completion
@@ -133,7 +137,7 @@ websocket_connections_active = _gauge("transcription_websocket_connections_activ
 websocket_connections_total = _counter("transcription_websocket_connections_total", "Total WebSocket connections")
 websocket_messages_sent_total = _counter(
     "transcription_websocket_messages_sent_total", "WebSocket messages sent to clients",
-    ["type"],  # type: status | error
+    ["type"],  # type: status | error | title
 )
 websocket_disconnects_total = _counter(
     "transcription_websocket_disconnects_total", "WebSocket disconnects",
@@ -163,6 +167,10 @@ api_token_auth_total = _counter(
     ["result"],  # result: success | failure
 )
 api_tokens_active = _gauge("transcription_api_tokens_active", "Active (non-revoked, non-expired) API tokens")
+api_token_expiry_reminders_total = _counter(
+    "transcription_api_token_expiry_reminders_total", "API token expiry reminders by outcome",
+    ["result"],  # result: sent | logged | rejected | failed
+)
 
 # --- Users ---
 users_total = _gauge(
@@ -310,11 +318,18 @@ def init_label_series() -> None:
     # The duration histogram is seeded for the same reason: its _sum and _count
     # otherwise appear at their first value, and increase() over a series with
     # no earlier sample is 0, so the first call after a restart never shows.
+    if settings.ENABLE_SUPPORT_ASSISTANT and support_assistant_requests_total is not None:
+        for result in ("ok", "busy", "llm_error", "output_limit", "aborted"):
+            support_assistant_requests_total.labels(result).inc(0)
+
     if llm_requests_total is not None and llm_errors_total is not None:
         provider = settings.LLM_PROVIDER
         model = settings.LLM_MODEL
         if provider:
-            for operation in ("analysis", "translation", "refinement", "title"):
+            operations = ["analysis", "translation", "refinement", "title"]
+            if settings.ENABLE_SUPPORT_ASSISTANT:
+                operations.append("support")
+            for operation in operations:
                 llm_requests_total.labels(provider, model, operation).inc(0)
                 llm_errors_total.labels(provider, model, operation).inc(0)
                 if llm_duration_seconds is not None:

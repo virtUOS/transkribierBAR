@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from '../../store'
-import { api } from '../../api/client'
+import { api, ApiError } from '../../api/client'
 
 const SPEAKER_PLACEHOLDER_RE = /^SPEAKER_\d+$/
 
@@ -50,6 +50,7 @@ export function SpeakerMapping({ isOpen, onClose, focusSpeaker }: Props) {
   // placeholder, so pressing Apply without typing is a no-op instead of
   // renaming "Lars" to "Lars".
   const [edits, setEdits] = useState<Record<string, string>>({})
+  const [applyError, setApplyError] = useState<string | null>(null)
 
   // Reset draft edits whenever the dialog (re-)opens. Tracking the previous
   // value as state and adjusting during render is the React-recommended way
@@ -57,7 +58,10 @@ export function SpeakerMapping({ isOpen, onClose, focusSpeaker }: Props) {
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen)
   if (isOpen !== prevIsOpen) {
     setPrevIsOpen(isOpen)
-    if (isOpen) setEdits({})
+    if (isOpen) {
+      setEdits({})
+      setApplyError(null)
+    }
   }
 
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
@@ -99,7 +103,14 @@ export function SpeakerMapping({ isOpen, onClose, focusSpeaker }: Props) {
       }
     }
     if (changed) {
-      await api.updateSpeakers(transcriptionId, next)
+      setApplyError(null)
+      try {
+        await api.updateSpeakers(transcriptionId, next)
+      } catch (e) {
+        // Keep the panel open with the typed names so the user can retry.
+        setApplyError(e instanceof ApiError && e.message ? e.message : t('editor.speakerSaveFailed'))
+        return
+      }
       setSpeakerMappings(next)
     }
     onClose()
@@ -146,6 +157,9 @@ export function SpeakerMapping({ isOpen, onClose, focusSpeaker }: Props) {
       )}
       {identities.length > 1 && (
         <p className="text-gray-500 text-xs mt-3">{t('editor.speakerMergeHint')}</p>
+      )}
+      {applyError && (
+        <p role="alert" className="text-xs text-red-400 mt-3">{applyError}</p>
       )}
       <div className="flex justify-end gap-3 mt-6">
         <button onClick={onClose} className="px-4 py-1.5 text-sm text-gray-300 hover:text-white">
