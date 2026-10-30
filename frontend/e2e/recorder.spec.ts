@@ -1,15 +1,35 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
 
-// The recorder adapts to the browser (src/utils/platformDetect.ts), so this spec
-// runs in Chromium and Firefox (see playwright.config.ts). Both browsers are
-// started with fake media devices: a generated tone instead of a microphone,
-// and no permission prompt. CI runs on Linux, so Chromium takes the "tab-only"
-// system-audio path and Firefox the "dual-device" one.
+// The recorder adapts to the browser and OS (src/utils/platformDetect.ts), so
+// this spec runs in Chromium and Firefox (see playwright.config.ts). Both
+// browsers are started with fake media devices: a generated tone instead of a
+// microphone, and no permission prompt. Which system-audio path the app offers
+// depends on the OS as well, so the tests expect what the app's own rules give
+// for the OS they run on: in CI (Linux) Chromium takes the "tab-only" path and
+// Firefox the "dual-device" one; on macOS Firefox takes "limited".
 
-const SYSTEM_AUDIO_HINT = {
-  chromium: 'system audio capture is limited to browser tab audio',
-  firefox: 'Select a second audio input device below',
+/** A phrase from the hint the system-audio card shows for each kind of support. */
+const SYSTEM_AUDIO_HINT: Record<string, string> = {
+  full: 'Select an entire screen to capture all system audio',
+  'tab-only': 'system audio capture is limited to browser tab audio',
+  'dual-device': 'Select a second audio input device below',
+  limited: 'System audio capture has limited support in Firefox',
+}
+
+const HOST_OS: Record<string, string> = { linux: 'linux', darwin: 'macos', win32: 'windows' }
+
+/**
+ * The system-audio support the app should offer here: its own rules
+ * (getSystemAudioSupport, loaded from the Vite dev server) applied to the
+ * browser Playwright started and the OS this test runs on. The page detects
+ * both from its user agent, so a wrong detection shows up as a wrong hint.
+ * Needs a page on the app's origin.
+ */
+async function expectedSystemAudioSupport(page: Page, browserName: string): Promise<string> {
+  const profile = JSON.stringify({ engine: browserName, os: HOST_OS[process.platform] ?? 'other' })
+  // A string, as it runs in the page and imports a path only the dev server knows.
+  return page.evaluate<string>(`import('/src/utils/platformDetect.ts').then((m) => m.getSystemAudioSupport(${profile}))`)
 }
 
 async function openRecorder(page: Page): Promise<void> {
@@ -42,13 +62,19 @@ test('a microphone recording is uploaded and transcribed', async ({ page }) => {
 
 test('the system-audio option explains what this browser can capture', async ({ page, browserName }) => {
   await openRecorder(page)
+  const support = await expectedSystemAudioSupport(page, browserName)
   await page.locator('[data-help="record-source-system"]').click()
-  await expect(page.getByText(SYSTEM_AUDIO_HINT[browserName as keyof typeof SYSTEM_AUDIO_HINT])).toBeVisible()
-  await expect(page.getByText('System audio source')).toBeVisible({ visible: browserName === 'firefox' })
+  await expect(page.getByText(SYSTEM_AUDIO_HINT[support])).toBeVisible()
+  // Only the dual-device mode asks for a second input device.
+  await expect(page.getByText('System audio source')).toBeVisible({ visible: support === 'dual-device' })
 })
 
 test('Firefox on Linux mixes a second input device in as system audio', async ({ page, browserName }) => {
-  test.skip(browserName !== 'firefox', 'the dual-device mode is Firefox on Linux only')
+  await page.goto('/')
+  test.skip(
+    (await expectedSystemAudioSupport(page, browserName)) !== 'dual-device',
+    'the app offers the dual-device mode only in Firefox on Linux',
+  )
 
   // Firefox offers a single fake microphone, so a second input (standing in for
   // a PulseAudio/PipeWire monitor source) is added to the device list and
