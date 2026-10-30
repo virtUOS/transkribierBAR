@@ -36,4 +36,18 @@ describe('buildAssistantCorpus', () => {
     expect(out).toContain('Before')
     expect(out).toContain('After')
   })
+
+  it('wraps contact paragraphs in the contact feature, except inside gated sections', () => {
+    const out = buildAssistantCorpus([
+      { id: 'a', markdown: 'Intro\n\nSchreiben Sie an {{contact_email}}.\n\nOutro' },
+      { id: 'b', markdown: 'Gated, mail {{contact_email}}', feature: 'llm' },
+    ])
+    expect(out).toContain(
+      '<!--tw-feature:contact-->\nSchreiben Sie an __TW_SETTING_contact_email__.\n<!--/tw-feature:contact-->',
+    )
+    expect(out).not.toContain('<!--tw-feature:contact-->\nGated')
+    expect(out.match(/tw-feature:contact/g)).toHaveLength(2)
+    const gated = out.slice(out.indexOf('<!--tw-feature:llm-->'))
+    expect(gated).not.toContain('tw-feature:contact')
+  })
 })
