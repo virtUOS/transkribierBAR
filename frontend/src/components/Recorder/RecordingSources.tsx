@@ -14,6 +14,18 @@ const warningKey: Record<string, string> = {
   limited: 'recorder.systemAudioWarningLimited',
 }
 
+// Device labels are empty until the permission is granted: ask for it, then list the devices
+async function devicesWithPermission(kind: 'audio' | 'video'): Promise<MediaDeviceInfo[] | null> {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia(kind === 'audio' ? { audio: true } : { video: true })
+    stream.getTracks().forEach((tr) => tr.stop())
+    return await navigator.mediaDevices.enumerateDevices()
+  } catch {
+    // Permission denied — the permission hook picks this up via onchange or the next refresh.
+    return null
+  }
+}
+
 interface RecordingSourcesProps {
   useMicrophone: boolean
   onUseMicrophoneChange: (use: boolean) => void
@@ -61,18 +73,10 @@ export function RecordingSources(props: RecordingSourcesProps) {
     onValidityChange?.(valid)
   }, [valid, onValidityChange])
 
-  async function enumerateWithPermission(kind: 'audio' | 'video') {
-    try {
-      const constraints: MediaStreamConstraints =
-        kind === 'audio' ? { audio: true } : { video: true }
-      const stream = await navigator.mediaDevices.getUserMedia(constraints)
-      stream.getTracks().forEach((tr) => tr.stop())
-      const devices = await navigator.mediaDevices.enumerateDevices()
-      setAudioDevices(devices.filter((d) => d.kind === 'audioinput'))
-      setVideoDevices(devices.filter((d) => d.kind === 'videoinput'))
-    } catch {
-      // Permission denied — the permission hook picks this up via onchange or the next refresh.
-    }
+  const showDevices = (devices: MediaDeviceInfo[] | null) => {
+    if (!devices) return
+    setAudioDevices(devices.filter((d) => d.kind === 'audioinput'))
+    setVideoDevices(devices.filter((d) => d.kind === 'videoinput'))
   }
 
   useEffect(() => {
@@ -80,12 +84,7 @@ export function RecordingSources(props: RecordingSourcesProps) {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices()
         const hasAudioLabels = devices.some((d) => d.kind === 'audioinput' && d.label)
-        if (!hasAudioLabels) {
-          await enumerateWithPermission('audio')
-        } else {
-          setAudioDevices(devices.filter((d) => d.kind === 'audioinput'))
-          setVideoDevices(devices.filter((d) => d.kind === 'videoinput'))
-        }
+        showDevices(hasAudioLabels ? devices : await devicesWithPermission('audio'))
       } catch {
         // Permission denied — show empty list
       }
@@ -99,7 +98,7 @@ export function RecordingSources(props: RecordingSourcesProps) {
     if (!useCamera || cameraDisabled) return
     const hasVideoLabels = videoDevices.some((d) => d.label)
     if (!hasVideoLabels) {
-      enumerateWithPermission('video')
+      devicesWithPermission('video').then(showDevices)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per camera toggle, not on every device list change
   }, [useCamera, cameraDisabled])

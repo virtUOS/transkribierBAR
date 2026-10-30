@@ -86,30 +86,29 @@ export function SubtitleEditor() {
     setSelectedRefinementPresetId(preset.id)
   }
 
-  // Auto-load refinement preset from active bundle
-  useEffect(() => {
-    if (activeBundleId && showRefineModal && !selectedRefinementPresetId) {
-      const bundle = bundles.find((b) => b.id === activeBundleId)
-      if (bundle?.refinement_preset_id) {
-        handleLoadRefinementPreset(bundle.refinement_preset_id)
-      }
-    }
-  }, [activeBundleId, bundles, showRefineModal]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Opening the dialog with no preset chosen yet loads the active bundle's refinement preset
+  const openRefineDialog = () => {
+    const bundlePresetId = bundles.find((b) => b.id === activeBundleId)?.refinement_preset_id
+    if (bundlePresetId && !selectedRefinementPresetId) handleLoadRefinementPreset(bundlePresetId)
+    setShowRefineModal(true)
+  }
   const [showTranslateModal, setShowTranslateModal] = useState(false)
   const [translateLanguage, setTranslateLanguage] = useState('en')
   const [translateSource, setTranslateSource] = useState<'original' | 'refined'>('refined')
   const [translating, setTranslating] = useState(false)
 
-  useEffect(() => {
-    if (showTranslateModal) {
-      setTranslateSource(refinedUtterances ? 'refined' : 'original')
-    }
-  }, [showTranslateModal, refinedUtterances])
-
-  // Renewing a stored translation starts from its language
+  // Renewing a stored translation starts from its language; the source starts from the refined text
   const openTranslateDialog = () => {
     if (translationLanguage) setTranslateLanguage(translationLanguage)
+    setTranslateSource(refinedUtterances ? 'refined' : 'original')
     setShowTranslateModal(true)
+  }
+
+  // A refinement that arrives while the dialog is open (a bundle runs one) becomes its source
+  const [translateSourceSetFor, setTranslateSourceSetFor] = useState(refinedUtterances)
+  if (translateSourceSetFor !== refinedUtterances) {
+    setTranslateSourceSetFor(refinedUtterances)
+    if (showTranslateModal) setTranslateSource(refinedUtterances ? 'refined' : 'original')
   }
   const [summaryCollapsed, setSummaryCollapsed] = useState(false)
   const [editingCell, setEditingCell] = useState<{ index: number; field: string } | null>(null)
@@ -666,7 +665,7 @@ export function SubtitleEditor() {
         {llmAvailable && !refinementMetadata && (
           <button
             data-help="refine-open"
-            onClick={() => setShowRefineModal(true)}
+            onClick={openRefineDialog}
             className="flex items-center gap-1.5 px-3 py-1 text-xs bg-amber-700/40 text-amber-300 border border-amber-700/50 rounded hover:bg-amber-700/60"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
