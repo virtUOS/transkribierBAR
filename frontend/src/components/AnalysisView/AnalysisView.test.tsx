@@ -451,28 +451,27 @@ describe('AnalysisView — existing analyses', () => {
     expect(writeText).toHaveBeenCalledWith('Plain answer')
   })
 
-  // The two tests below find the buttons by their hard-coded English titles
-  // (https://github.com/virtUOS/transkribierBAR/issues/251) and expect deletion without confirmation
-  // (https://github.com/virtUOS/transkribierBAR/issues/252); update them when either is fixed.
-  it('removes a single chapter through the server', async () => {
+  it('removes a single chapter through the server after confirmation', async () => {
     vi.mocked(api.getAnalysis).mockResolvedValue(summaryResult)
     vi.mocked(api.deleteAnalysisItem).mockResolvedValue({ ...summaryResult, chapters: [summaryResult.chapters[1]] })
     await setupWith([item()])
     fireEvent.click(screen.getByText('Summary with chapters'))
     await screen.findByText('1. Intro')
     fireEvent.click(screen.getAllByTitle('Remove chapter')[0])
+    expect(confirmSpy).toHaveBeenCalledWith('Remove this item from the analysis?')
     expect(await screen.findByText('1. Main')).toBeInTheDocument()
     expect(api.deleteAnalysisItem).toHaveBeenCalledWith('t1', 'a1', 'chapters', 0)
     expect(screen.queryByText('1. Intro')).not.toBeInTheDocument()
   })
 
-  it('removes a protocol action item through the server', async () => {
+  it('removes a protocol action item through the server after confirmation', async () => {
     vi.mocked(api.getAnalysis).mockResolvedValue(protocolResult)
     vi.mocked(api.deleteAnalysisItem).mockResolvedValue({ ...protocolResult, action_items: [] })
     await setupWith([item({ template: 'protocol' })])
     fireEvent.click(screen.getByText('Meeting protocol'))
     await screen.findByText('Weekly')
     fireEvent.click(screen.getAllByTitle('Remove item')[2])
+    expect(confirmSpy).toHaveBeenCalledWith('Remove this item from the analysis?')
     await waitFor(() => expect(screen.queryByText('Send report')).not.toBeInTheDocument())
     expect(api.deleteAnalysisItem).toHaveBeenCalledWith('t1', 'a1', 'action_items', 0)
   })
