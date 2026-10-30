@@ -114,17 +114,6 @@ async def _event_stream(
 
 @router.post("/chat")
 async def chat(body: AssistantChatRequest, user: UserInfo = Depends(_browser_user)):
-    now = time.monotonic()
-    started = _in_flight.get(user.id)
-    if started is not None and now - started < BUSY_STALE_SECONDS:
-        inc(support_assistant_requests_total, "busy")
-        return JSONResponse(
-            status_code=429,
-            content={
-                "detail": "The assistant is still answering your previous question.",
-                "code": "assistant_busy",
-            },
-        )
     provider = get_llm_provider()
     if provider is None:
         raise HTTPException(status_code=404)
@@ -136,6 +125,19 @@ async def chat(body: AssistantChatRequest, user: UserInfo = Depends(_browser_use
         {"role": "system", "content": prompt},
         *({"role": m.role, "content": m.content} for m in body.messages),
     ]
+    # Check and set in one step, after every await: no other request of this
+    # user can slip in between.
+    now = time.monotonic()
+    started = _in_flight.get(user.id)
+    if started is not None and now - started < BUSY_STALE_SECONDS:
+        inc(support_assistant_requests_total, "busy")
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": "The assistant is still answering your previous question.",
+                "code": "assistant_busy",
+            },
+        )
     _in_flight[user.id] = now
     return StreamingResponse(
         _event_stream(user.id, provider, messages),

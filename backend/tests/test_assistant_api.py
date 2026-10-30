@@ -185,3 +185,19 @@ async def test_situation_uses_open_transcription(monkeypatch):
     r = await post(body(view="detail", transcription_id="t-1"))
     assert r.status_code == 200
     assert "Error code: timeout" in fake.seen[0][0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_concurrent_detail_requests_are_not_both_admitted(monkeypatch):
+    import asyncio
+
+    use(monkeypatch, FakeProvider())
+
+    async def slow_situation(user_id, transcription_id):
+        await asyncio.sleep(0.05)
+        return None
+
+    monkeypatch.setattr(sa, "load_situation", slow_situation)
+    payload = body(view="detail", transcription_id="t-1")
+    r1, r2 = await asyncio.gather(post(payload), post(payload))
+    assert sorted([r1.status_code, r2.status_code]) == [200, 429]
