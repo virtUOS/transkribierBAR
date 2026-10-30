@@ -54,6 +54,8 @@ export default defineConfig({
       url: `http://127.0.0.1:${API_PORT}/api/health`,
       reuseExistingServer: false,
       timeout: 60_000,
+      // Without it Playwright SIGKILLs the stack, which then cannot remove its temp dir.
+      gracefulShutdown: { signal: 'SIGTERM', timeout: 10_000 },
     },
     {
       command: `npx vite --host 127.0.0.1 --port ${WEB_PORT} --strictPort`,

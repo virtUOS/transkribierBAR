@@ -1,7 +1,8 @@
 // Starts the backend for the end-to-end tests, together with the fake ASR/LLM
 // services (backend/scripts/fake_services.py), on a fresh database in a temp
 // dir. Playwright runs this as a web server (see playwright.config.ts) and
-// stops it after the run; the temp dir goes with it.
+// stops it with SIGTERM after the run (its gracefulShutdown option); the stack
+// then stops both servers and removes the temp dir.
 import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -14,10 +15,14 @@ const children: ChildProcess[] = []
 
 function start(args: string[], env: NodeJS.ProcessEnv): ChildProcess {
   const child = spawn(python, args, { cwd: backendDir, env, stdio: 'inherit' })
+  child.once('error', (err) => {
+    console.error(`[e2e] could not run ${python}: ${err.message}`)
+    void stop(1)
+  })
   child.once('exit', (code, signal) => {
     if (!stopping) {
       console.error(`[e2e] ${args.join(' ')} exited (${code ?? signal})`)
-      stop(1)
+      void stop(1)
     }
   })
   children.push(child)
@@ -25,14 +30,24 @@ function start(args: string[], env: NodeJS.ProcessEnv): ChildProcess {
 }
 
 let stopping = false
-function stop(code = 0): void {
+/** Stop both servers, then remove the temp dir, so nothing writes to it after. */
+async function stop(code = 0): Promise<void> {
+  if (stopping) return
   stopping = true
-  for (const child of children) child.kill('SIGTERM')
+  await Promise.all(
+    children
+      .filter((child) => child.pid !== undefined && child.exitCode === null && child.signalCode === null)
+      .map((child) => {
+        const exited = new Promise((resolve) => child.once('exit', resolve))
+        child.kill('SIGTERM')
+        return exited
+      }),
+  )
   rmSync(tempDir, { recursive: true, force: true })
   process.exit(code)
 }
-process.on('SIGINT', () => stop())
-process.on('SIGTERM', () => stop())
+process.on('SIGINT', () => void stop())
+process.on('SIGTERM', () => void stop())
 
 async function waitFor(url: string): Promise<void> {
   for (let i = 0; i < 100; i++) {
@@ -47,7 +62,12 @@ async function waitFor(url: string): Promise<void> {
 }
 
 start(['-m', 'scripts.fake_services', '--port', String(FAKE_PORT)], process.env)
-await waitFor(`${fakeUrl}/_fake/health`)
+try {
+  await waitFor(`${fakeUrl}/_fake/health`)
+} catch (err) {
+  console.error(`[e2e] ${(err as Error).message}`)
+  await stop(1)
+}
 
 // Every setting the backend reads from the environment that could reach a real
 // service is set here, since load_dotenv() fills in anything left unset from a
