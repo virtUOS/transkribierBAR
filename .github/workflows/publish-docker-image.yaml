@@ -41,9 +41,13 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
+          load: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             APP_VERSION=${{ steps.meta.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Smoke-test the image
+        run: scripts/smoke-test-image.sh "${{ fromJSON(steps.meta.outputs.json).tags[0] }}"
