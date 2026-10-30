@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.database import init_db, get_db
-from app.routers import config_router, upload, transcription, refinement, analysis, translation, presets, tokens, invitations as invitations_router, public_pages
+from app.routers import config_router, upload, transcription, refinement, analysis, translation, presets, tokens, invitations as invitations_router, assistant as assistant_router, public_pages
 from app.public_pages import load_privacy_notices
 from app.log_redaction import install_token_redaction
 from app.metrics import inc, gauge_set, cleanup_runs_total, cleanup_items_deleted_total, storage_bytes, api_tokens_active, invitations_expired_total, init_label_series, users_total, users_with_transcriptions, users_new
@@ -317,6 +317,7 @@ if settings.ENABLE_API_TOKENS:
 # dependency returns 404 when INVITATION_MODE=false. This avoids coupling the
 # mount to a startup-time flag that tests reload.
 app.include_router(invitations_router.router)
+app.include_router(assistant_router.router)
 
 
 def safe_static_file(static_dir: str, rel: str) -> str | None:
