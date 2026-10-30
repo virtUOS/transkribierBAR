@@ -74,6 +74,7 @@ LLM_PROVIDER=openai               # or: ollama (openai works with any OpenAI-com
 LLM_MODEL=gpt-4o
 LLM_API_KEY=                      # required for OpenAI / OpenAI-compatible APIs
 LLM_BASE_URL=                     # for custom endpoints (e.g., vLLM, Ollama: http://localhost:11434)
+ENABLE_SUPPORT_ASSISTANT=false    # optional help assistant in the help drawer; needs LLM_PROVIDER (see "Support assistant")
 
 # UI Configuration
 POPULAR_LANGUAGES=de,en,es,fr       # languages pinned at top of dropdowns (comma-separated codes)
@@ -165,6 +166,36 @@ own files, transcriptions, and presets, but cannot see another user's data.
 Tokens never carry LLM capabilities beyond what the deployment has configured:
 if `LLM_PROVIDER` is unset, analysis/translation/refinement endpoints return
 503 regardless of authentication method.
+
+## Support assistant
+
+With `ENABLE_SUPPORT_ASSISTANT=true` the help drawer gets an **Assistant** tab
+where users ask questions about using the app. It needs an LLM
+(`LLM_PROVIDER` and its settings) and is off by default. It answers from the
+in-app help only: the build turns the help markdown into `dist/assistant/<lang>.md`,
+which the backend loads at startup.
+
+The question, the earlier messages of that chat, the user manual and a few facts
+about the situation are sent to the configured LLM: the current page, the
+interface language, the contact address and, for an open transcription of the
+user's own, its status, error code and message, requested and detected language,
+and speech recognition model. Transcript text, files, analyses and translations
+are never sent. transkribierBAR stores no conversation and does not
+log message content. Personal API tokens cannot use the assistant, and each user
+can have one question in progress at a time.
+
+A request carries the whole manual, so the model needs a context window of at
+least 32k tokens; for Ollama set `OLLAMA_CONTEXT_LENGTH` (or the model's
+`num_ctx`).
+
+After changing the instructions or the help, run
+`docker exec transcription python scripts/audit_support_assistant.py`
+against a test deployment and read the answers (the script ships in the image at
+`/app/scripts/`; the grading rules are in its header). With
+`INVITATION_MODE=true`, set `AUDIT_USER` to an invited or admin identity
+(`docker exec -e AUDIT_USER=… transcription …`). Set `AUDIT_TRANSCRIPTION_ID`
+to a failed transcription of that user to also ask the failure question about
+it from the detail view.
 
 ## Development
 

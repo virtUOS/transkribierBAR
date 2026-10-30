@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && node scripts/build-guide.ts",
+    "build": "tsc -b && vite build && node scripts/build-guide.ts && node scripts/build-assistant-corpus.ts",
     "typecheck": "tsc -b",
     "help:shots": "node scripts/help-shots/run.ts",
     "lint": "eslint .",
