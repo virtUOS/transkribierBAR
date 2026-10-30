@@ -2,13 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useStore } from '../../store'
 import i18n from '../../i18n'
-import { api } from '../../api/client'
+import { api, ApiError } from '../../api/client'
+import { formatDateTime } from '../../utils/format'
 import { SettingsPage } from './index'
 import { ApiTokensSection } from './ApiTokensSection'
 import { CreateTokenModal } from './CreateTokenModal'
 import type { ApiToken, ApiTokenCreated } from '../../api/types'
 
-vi.mock('../../api/client', () => ({
+vi.mock('../../api/client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../api/client')>()),
   api: {
     listApiTokens: vi.fn(),
     createApiToken: vi.fn(),
@@ -58,9 +60,6 @@ describe('SettingsPage', () => {
   })
 })
 
-// The token name field is found by its placeholder because its label is not tied
-// to it (https://github.com/virtUOS/transkribierBAR/issues/250); switch to
-// getByLabelText('Name') once that is fixed.
 describe('ApiTokensSection', () => {
   it('lists tokens with prefix, status and dates', async () => {
     vi.mocked(api.listApiTokens).mockResolvedValue([
@@ -74,9 +73,9 @@ describe('ApiTokensSection', () => {
     expect(screen.getByText('Active')).toBeInTheDocument()
     expect(screen.getByText('Expired')).toBeInTheDocument()
     expect(screen.getByText('Revoked')).toBeInTheDocument()
-    expect(screen.getByText('last used 2026-02-02 10:00:00')).toBeInTheDocument()
-    // Only the active token can be revoked.
-    expect(screen.getAllByRole('button', { name: 'Revoke' })).toHaveLength(1)
+    expect(screen.getByText(`last used ${formatDateTime('2026-02-02 10:00:00', 'en')}`)).toBeInTheDocument()
+    // Active and expired tokens can be revoked (that clears an expired token's notice); revoked ones cannot.
+    expect(screen.getAllByRole('button', { name: 'Revoke' })).toHaveLength(2)
   })
 
   it('treats a token without expiry as active', async () => {
@@ -89,7 +88,7 @@ describe('ApiTokensSection', () => {
   it('shows the load error instead of the empty hint', async () => {
     vi.mocked(api.listApiTokens).mockRejectedValue(new Error('Server down'))
     render(<ApiTokensSection />)
-    expect(await screen.findByText('Server down')).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent('Loading the tokens failed.')
     expect(screen.queryByText(/No API tokens yet/)).not.toBeInTheDocument()
   })
 
@@ -110,7 +109,7 @@ describe('ApiTokensSection', () => {
     vi.mocked(api.revokeApiToken).mockRejectedValue(new Error('Not Found'))
     render(<ApiTokensSection />)
     fireEvent.click(await screen.findByRole('button', { name: 'Revoke' }))
-    expect(await screen.findByText('Not Found')).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent('Revoking the token failed.')
     expect(screen.getByRole('button', { name: 'Revoke' })).toBeEnabled()
   })
 
@@ -120,7 +119,7 @@ describe('ApiTokensSection', () => {
     render(<ApiTokensSection />)
     await screen.findByText(/No API tokens yet/)
     fireEvent.click(screen.getByRole('button', { name: 'Create token' }))
-    fireEvent.change(screen.getByPlaceholderText('e.g. my-script'), { target: { value: 'my-script' } })
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'my-script' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     expect(await screen.findByText('tw_SECRET_once')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
@@ -133,9 +132,9 @@ describe('ApiTokensSection', () => {
     vi.mocked(api.listApiTokens).mockResolvedValue([])
     render(<ApiTokensSection />)
     fireEvent.click(screen.getByRole('button', { name: 'Create token' }))
-    expect(screen.getByPlaceholderText('e.g. my-script')).toBeInTheDocument()
+    expect(screen.getByLabelText('Name')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByPlaceholderText('e.g. my-script')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument()
     expect(api.createApiToken).not.toHaveBeenCalled()
   })
 })
@@ -156,7 +155,7 @@ describe('CreateTokenModal', () => {
     renderModal()
     const create = screen.getByRole('button', { name: 'Create' })
     expect(create).toBeDisabled()
-    fireEvent.change(screen.getByPlaceholderText('e.g. my-script'), { target: { value: '   ' } })
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: '   ' } })
     expect(create).toBeDisabled()
   })
 
@@ -165,7 +164,7 @@ describe('CreateTokenModal', () => {
     vi.mocked(api.createApiToken).mockResolvedValue(created)
     renderModal()
     expect(screen.getByLabelText('Expires in')).toHaveValue('30')
-    fireEvent.change(screen.getByPlaceholderText('e.g. my-script'), { target: { value: '  deploy  ' } })
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: '  deploy  ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(api.createApiToken).toHaveBeenCalledWith('deploy', 30))
   })
@@ -175,7 +174,7 @@ describe('CreateTokenModal', () => {
     renderModal()
     expect(screen.getByLabelText('Expires in')).toHaveValue('90')
     fireEvent.change(screen.getByLabelText('Expires in'), { target: { value: '365' } })
-    fireEvent.change(screen.getByPlaceholderText('e.g. my-script'), { target: { value: 'x' } })
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'x' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(api.createApiToken).toHaveBeenCalledWith('x', 365))
   })
@@ -190,7 +189,7 @@ describe('CreateTokenModal', () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
     vi.mocked(api.createApiToken).mockResolvedValue(created)
     const { onCreated } = renderModal()
-    fireEvent.change(screen.getByPlaceholderText('e.g. my-script'), { target: { value: 'x' } })
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'x' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
 
     expect(await screen.findByRole('heading', { name: 'Token created' })).toBeInTheDocument()
@@ -211,7 +210,7 @@ describe('CreateTokenModal', () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockResolvedValue(undefined) }, configurable: true })
     vi.mocked(api.createApiToken).mockResolvedValue(created)
     renderModal()
-    fireEvent.change(screen.getByPlaceholderText('e.g. my-script'), { target: { value: 'x' } })
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'x' } })
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     })
@@ -226,9 +225,9 @@ describe('CreateTokenModal', () => {
   })
 
   it('shows the server error and stays on the form', async () => {
-    vi.mocked(api.createApiToken).mockRejectedValue(new Error('Too many tokens'))
+    vi.mocked(api.createApiToken).mockRejectedValue(new ApiError(400, 'Too many tokens'))
     renderModal()
-    fireEvent.change(screen.getByPlaceholderText('e.g. my-script'), { target: { value: 'x' } })
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'x' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     expect(await screen.findByText('Too many tokens')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Create' })).toBeEnabled()
@@ -238,7 +237,7 @@ describe('CreateTokenModal', () => {
     let resolve!: (v: ApiTokenCreated) => void
     vi.mocked(api.createApiToken).mockReturnValue(new Promise((r) => { resolve = r }))
     renderModal()
-    fireEvent.change(screen.getByPlaceholderText('e.g. my-script'), { target: { value: 'x' } })
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'x' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     expect(await screen.findByRole('button', { name: 'Creating…' })).toBeDisabled()
     await act(async () => resolve(created))
