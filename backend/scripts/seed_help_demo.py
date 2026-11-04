@@ -65,7 +65,7 @@ def generate_media(path: str, frequency: int) -> None:
             "it is required to generate the demo media."
         )
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603  # argument list is fixed; ffmpeg path comes from shutil.which
         [
             ffmpeg, "-y", "-loglevel", "error",
             "-f", "lavfi", "-i", f"sine=frequency={frequency}:duration={DURATION_S}",

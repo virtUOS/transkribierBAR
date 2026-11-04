@@ -32,7 +32,6 @@ import importlib
 
 import pytest
 
-from app.config import settings
 from app.services.llm.prompt import REFINEMENT_OUTPUT_TOKEN_CAP
 
 

@@ -13,3 +13,5 @@ pytest>=9.2.0
 pytest-asyncio>=1.4.1
 pytest-cov>=6.0.0
 respx>=0.22.0
+# Linter; CI and scripts/check.sh run `ruff check` (rules in pyproject.toml).
+ruff>=0.17.3

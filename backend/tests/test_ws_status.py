@@ -23,7 +23,7 @@ async def _seed(user_id: str, transcription_id: str, **columns) -> None:
     async with get_db() as db:
         await db.execute("INSERT INTO users (id, email) VALUES (?, ?)", (user_id, f"{user_id}@x"))
         await db.execute(
-            f"INSERT INTO transcriptions ({names}) VALUES ({marks})",
+            f"INSERT INTO transcriptions ({names}) VALUES ({marks})",  # noqa: S608  # test's own rows; values bound
             (transcription_id, user_id, *columns.values()),
         )
         await db.commit()

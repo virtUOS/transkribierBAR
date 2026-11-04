@@ -758,5 +758,5 @@ async def websocket_status(websocket: WebSocket, transcription_id: str):
         inc(websocket_disconnects_total, close_reason)
         try:
             await websocket.close()
-        except Exception:
+        except Exception:  # noqa: S110  # best-effort cleanup: the socket may already be closed
             pass

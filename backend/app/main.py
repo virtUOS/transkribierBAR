@@ -46,7 +46,7 @@ def _dir_size_bytes(path: str) -> int:
 def _refresh_storage_gauge():
     try:
         gauge_set(storage_bytes, _dir_size_bytes(settings.TEMP_PATH), settings.TEMP_PATH)
-    except Exception:
+    except Exception:  # noqa: S110  # best-effort metric: nothing to do when measuring the directory fails
         pass
 
 
@@ -167,7 +167,7 @@ async def cleanup_old_files():
 
                 # Get expired files to delete from disk
                 cursor = await db.execute(
-                    f"SELECT file_path, mp3_path FROM files WHERE id IN ({expired_files_q})",
+                    f"SELECT file_path, mp3_path FROM files WHERE id IN ({expired_files_q})",  # noqa: S608  # constant subquery; values bound with ?
                     (now,),
                 )
                 rows = await cursor.fetchall()
@@ -182,31 +182,31 @@ async def cleanup_old_files():
                 # Remember the job ids: once the rows go, so do they. A remote copy
                 # already deleted answers 404, which counts as done.
                 cursor = await db.execute(
-                    f"SELECT asr_job_id FROM transcriptions WHERE file_id IN ({expired_files_q}) "
+                    f"SELECT asr_job_id FROM transcriptions WHERE file_id IN ({expired_files_q}) "  # noqa: S608  # constant subquery; values bound with ?
                     "AND asr_job_id IS NOT NULL",
                     (now,),
                 )
                 asr_job_ids = [row["asr_job_id"] for row in await cursor.fetchall()]
 
                 # Delete related DB records
-                expired_transcriptions_q = f"SELECT id FROM transcriptions WHERE file_id IN ({expired_files_q})"
+                expired_transcriptions_q = f"SELECT id FROM transcriptions WHERE file_id IN ({expired_files_q})"  # noqa: S608  # constant subquery; its ? is bound where it runs
                 cursor = await db.execute(
-                    f"DELETE FROM analyses WHERE transcription_id IN ({expired_transcriptions_q})",
+                    f"DELETE FROM analyses WHERE transcription_id IN ({expired_transcriptions_q})",  # noqa: S608  # constant subquery; values bound with ?
                     (now,),
                 )
                 analyses_deleted = cursor.rowcount
                 cursor = await db.execute(
-                    f"DELETE FROM speaker_mappings WHERE transcription_id IN ({expired_transcriptions_q})",
+                    f"DELETE FROM speaker_mappings WHERE transcription_id IN ({expired_transcriptions_q})",  # noqa: S608  # constant subquery; values bound with ?
                     (now,),
                 )
                 mappings_deleted = cursor.rowcount
                 cursor = await db.execute(
-                    f"DELETE FROM transcriptions WHERE file_id IN ({expired_files_q})",
+                    f"DELETE FROM transcriptions WHERE file_id IN ({expired_files_q})",  # noqa: S608  # constant subquery; values bound with ?
                     (now,),
                 )
                 transcriptions_deleted = cursor.rowcount
                 cursor = await db.execute(
-                    f"DELETE FROM files WHERE id IN ({expired_files_q})",
+                    f"DELETE FROM files WHERE id IN ({expired_files_q})",  # noqa: S608  # constant subquery; values bound with ?
                     (now,),
                 )
                 db_files_deleted = cursor.rowcount

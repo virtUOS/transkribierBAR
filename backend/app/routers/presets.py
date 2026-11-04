@@ -346,7 +346,7 @@ async def _verify_bundle_preset_ownership(db, body: BundleCreate, user_id: str) 
         if not value:
             continue
         cursor = await db.execute(
-            f"SELECT 1 FROM {table} WHERE id = ? AND user_id = ?",
+            f"SELECT 1 FROM {table} WHERE id = ? AND user_id = ?",  # noqa: S608  # fixed dict; values bound with ?
             (value, user_id),
         )
         if not await cursor.fetchone():

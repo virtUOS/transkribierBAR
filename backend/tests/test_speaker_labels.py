@@ -58,7 +58,7 @@ async def _insert(path, rows):
     async with get_db(path) as db:
         for table, values in rows:
             await db.execute(
-                f"INSERT INTO {table} ({', '.join(values)}) VALUES ({', '.join('?' for _ in values)})",
+                f"INSERT INTO {table} ({', '.join(values)}) VALUES ({', '.join('?' for _ in values)})",  # noqa: S608  # table and columns come from _transcription() and the test's kwargs
                 tuple(values.values()),
             )
         await db.commit()

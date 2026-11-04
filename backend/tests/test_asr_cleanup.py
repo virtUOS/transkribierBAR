@@ -108,7 +108,7 @@ async def test_expiry_deletes_local_rows_before_contacting_the_asr_host():
         if not seen:
             async with get_db() as db:
                 for table in ("files", "transcriptions"):
-                    cursor = await db.execute(f"SELECT COUNT(*) AS n FROM {table}")
+                    cursor = await db.execute(f"SELECT COUNT(*) AS n FROM {table}")  # noqa: S608  # test's own tuple
                     seen[table] = (await cursor.fetchone())["n"]
         await release.wait()
 

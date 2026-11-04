@@ -7,7 +7,7 @@ polled forever.
 
 import asyncio
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from app.config import settings
 from app.models import TranscriptionStatus
