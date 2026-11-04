@@ -92,8 +92,27 @@ async def start_transcription(
 
     gauge_inc(transcription_queue_depth)
     submitted_at = time.monotonic()
-    asyncio.create_task(_run_transcription(transcription_id, mp3_path, req, submitted_at))
+    _start_transcription(transcription_id, mp3_path, req, submitted_at)
     return {"id": transcription_id, "status": "pending"}
+
+
+# Running _run_transcription tasks by transcription id, so that a delete can
+# cancel the in-flight ASR request (#309): with the whisperx backend the request
+# is the task itself, and the server frees the GPU when the connection drops.
+# Also the strong references asyncio asks callers to keep.
+_running_transcriptions: dict[str, asyncio.Task] = {}
+
+
+def _start_transcription(transcription_id, mp3_path, req, submitted_at) -> asyncio.Task:
+    task = asyncio.create_task(_run_transcription(transcription_id, mp3_path, req, submitted_at))
+    _running_transcriptions[transcription_id] = task
+
+    def _forget(t: asyncio.Task) -> None:
+        if _running_transcriptions.get(transcription_id) is t:
+            del _running_transcriptions[transcription_id]
+
+    task.add_done_callback(_forget)
+    return task
 
 
 def _job_timeout_for(audio_duration: float | None) -> float:
@@ -267,6 +286,12 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
         except Exception as e:
             logging.warning("Title generation failed for %s: %s", transcription_id, e)
 
+    except asyncio.CancelledError:
+        # Deleted while running, or the app is shutting down: the row is gone or
+        # about to be, so there is nothing to mark failed. Backends whose remote
+        # job outlives the request get their cleanup from the delete endpoint.
+        logging.info("Transcription %s cancelled", transcription_id)
+        raise
     except Exception as e:
         async with get_db() as db:
             cursor = await db.execute(
@@ -482,6 +507,12 @@ async def delete_transcription(transcription_id: str, user: UserInfo = Depends(g
         else:
             should_delete_files = False
         await db.commit()
+
+    # The row is already gone, so the task can write nothing more. The remote
+    # copy (asr_job_id, when the task got that far) is deleted below as before.
+    running = _running_transcriptions.pop(transcription_id, None)
+    if running:
+        running.cancel()
 
     # Remove files from disk only if the file record was deleted
     if file_row and should_delete_files:
