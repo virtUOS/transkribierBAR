@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { getSystemAudioSupport } from '../../utils/platformDetect'
 import { useDevicePermission } from '../../utils/devicePermissions'
-import { getSecondDeviceCandidates } from '../../utils/secondDeviceCandidates'
+import { getSecondDeviceCandidates } from '../../utils/audioInputCandidates'
 import { SourceCard } from './SourceCard'
 
 const systemAudioSupport = getSystemAudioSupport()
