@@ -55,7 +55,7 @@
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
     "tailwindcss": "^4.3.3",
-    "typescript": "~5.9.3",
+    "typescript": "~7.0.2",
     "typescript-eslint": "^8.72.1",
     "unified": "^11.0.5",
     "unist-util-visit": "^5.2.0",
