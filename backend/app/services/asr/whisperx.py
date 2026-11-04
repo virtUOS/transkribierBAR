@@ -1,3 +1,4 @@
+import asyncio
 import os
 import uuid
 import httpx
@@ -36,6 +37,10 @@ class WhisperXBackend(ASRBackend):
             result = await self._call_whisperx(file_path, ts)
             _results[job_id] = result
             _statuses[job_id] = "completed"
+        except asyncio.CancelledError:
+            # The request was cancelled (transcription deleted, #309): nothing will ever read this job.
+            _statuses.pop(job_id, None)
+            raise
         except httpx.HTTPStatusError as e:
             # Surfaced through get_status, which the router turns into a failed job.
             _statuses[job_id] = "failed"
