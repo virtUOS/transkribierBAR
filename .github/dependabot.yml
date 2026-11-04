@@ -10,6 +10,13 @@ updates:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
     groups:
+      # @vitest/coverage-v8 pins the exact vitest version as a peer dependency,
+      # so a lone bump of either fails to install. First match wins: this group
+      # takes vitest's major updates too, before `frontend` sees them.
+      vitest:
+        patterns:
+          - vitest
+          - "@vitest/*"
       frontend:
         update-types:
           - minor
