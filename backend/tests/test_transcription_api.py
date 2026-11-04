@@ -871,7 +871,7 @@ async def test_delete_cancels_the_running_asr_request(mock_asr):
 
     assert resp.status_code == 200
     with pytest.raises(asyncio.CancelledError):
-        await task
+        await asyncio.wait_for(task, timeout=5)
     assert txn_id not in transcription_module._running_transcriptions
     assert asr_base.asr_semaphore._value == settings.ASR_MAX_CONCURRENT
     assert active_transcriptions._value.get() == active_before
@@ -894,16 +894,19 @@ async def test_delete_cancels_a_queued_transcription(mock_asr, monkeypatch):
             upload = await client.post("/api/upload", files={"file": ("test.mp3", b"fake", "audio/mpeg")})
             resp = await client.post("/api/transcribe", json={"file_id": upload.json()["id"], "language": "en", "model": "base"})
             txn_id = resp.json()["id"]
-            for _ in range(100):  # the task marks the row 'processing' before it queues
-                if (await _row(txn_id))["status"] == "processing":
+            for _ in range(100):  # a non-empty waiter list means the task waits for a permit
+                if blocker._waiters:
                     break
                 await asyncio.sleep(0.01)
+            else:
+                pytest.fail("the task never queued at the ASR semaphore")
+            assert (await _row(txn_id))["status"] == "processing"
             task = transcription_module._running_transcriptions[txn_id]
             resp = await client.delete(f"/api/transcription/{txn_id}")
 
     assert resp.status_code == 200
     with pytest.raises(asyncio.CancelledError):
-        await task
+        await asyncio.wait_for(task, timeout=5)
     mock_asr.submit.assert_not_called()
     blocker.release()
     assert blocker._value == 1  # the cancelled waiter took no permit
@@ -945,7 +948,7 @@ async def test_delete_during_the_duration_probe_keeps_the_gauge_balanced(mock_as
 
     assert resp.status_code == 200
     with pytest.raises(asyncio.CancelledError):
-        await task
+        await asyncio.wait_for(task, timeout=5)
     assert active_transcriptions._value.get() == active_before
     mock_asr.submit.assert_not_called()
 
