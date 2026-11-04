@@ -9,7 +9,7 @@
 # command in requirements.in).
 -r requirements.in
 -c requirements.txt
-pytest>=8.0.0
+pytest>=9.2.0
 pytest-asyncio>=1.4.1
 pytest-cov>=6.0.0
 respx>=0.22.0
