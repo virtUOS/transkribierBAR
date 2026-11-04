@@ -36,7 +36,7 @@ With **System audio** you also record what your computer plays, such as an onlin
 
 - **Chromium browsers on Windows (Chrome, Edge, Brave):** The browser lets you choose a screen or a tab. An entire screen gives all system audio, a tab gives only its sound.
 - **Chromium browsers on other systems:** Only the sound of a browser tab is possible. Run the meeting in a tab and select that tab when the browser asks.
-- **Firefox on Linux:** In the **System audio source** field, choose a second audio input device, for example a PulseAudio or PipeWire monitor source.
+- **Firefox on Linux:** In the **System audio source** field, choose a second audio input device, for example a PulseAudio or PipeWire monitor source. Monitor sources whose names start with "Monitor of" are listed first there and are left out of the **Microphone** field as long as another device remains.
 - **Firefox on other systems:** Support is limited. Use a Chromium browser instead.
 - **Mobile devices and other browsers:** **System audio** is not offered.
 

@@ -36,7 +36,7 @@ Mit **Systemaudio** nehmen Sie zusätzlich auf, was Ihr Computer abspielt, etwa 
 
 - **Chromium-Browser unter Windows (Chrome, Edge, Brave):** Der Browser lässt Sie einen Bildschirm oder einen Tab wählen. Ein ganzer Bildschirm liefert das gesamte Systemaudio, ein Tab nur dessen Ton.
 - **Chromium-Browser unter anderen Systemen:** Nur der Ton eines Browser-Tabs ist möglich. Führen Sie das Meeting in einem Tab und wählen Sie diesen Tab aus, wenn der Browser fragt.
-- **Firefox unter Linux:** Wählen Sie im Feld **Systemaudioquelle** ein zweites Audio-Eingabegerät, zum Beispiel eine PulseAudio- oder PipeWire-Monitorquelle.
+- **Firefox unter Linux:** Wählen Sie im Feld **Systemaudioquelle** ein zweites Audio-Eingabegerät, zum Beispiel eine PulseAudio- oder PipeWire-Monitorquelle. Monitorquellen, deren Name mit „Monitor of“ beginnt, stehen dort an erster Stelle und fehlen im Feld **Mikrofon**, solange ein anderes Gerät übrig bleibt.
 - **Firefox unter anderen Systemen:** Die Unterstützung ist eingeschränkt. Verwenden Sie besser einen Chromium-Browser.
 - **Mobilgeräte und andere Browser:** **Systemaudio** wird nicht angeboten.
 
