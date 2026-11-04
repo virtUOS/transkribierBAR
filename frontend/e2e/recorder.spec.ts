@@ -129,6 +129,8 @@ test('Firefox on Linux mixes a second input device in as system audio', async ({
   await page.locator('[data-help="record-source-system"]').click()
   // The only other input is picked automatically.
   await expect(page.locator('output').filter({ hasText: 'Monitor of e2e output' })).toBeVisible()
+  // The monitor is left out of the microphone list (#284): only the fake microphone remains.
+  await expect(page.locator('[data-help="record-mic-device"]')).not.toContainText('Monitor of e2e output')
 
   // The mixing AudioContext starts running a moment after the recording, and
   // only with an audio output (CI gives Firefox a PulseAudio null sink, see
