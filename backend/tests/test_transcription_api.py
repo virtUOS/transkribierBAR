@@ -948,3 +948,36 @@ async def test_delete_during_the_duration_probe_keeps_the_gauge_balanced(mock_as
         await task
     assert active_transcriptions._value.get() == active_before
     mock_asr.submit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_delete_cancels_a_job_while_polling(mock_asr):
+    """#309: a cancel after submit() returned and the job id was stored must
+    clean up the remote job from the task itself, not only from the endpoint."""
+    polling = asyncio.Event()
+
+    async def _status(job_id):
+        polling.set()
+        await asyncio.Event().wait()  # never returns on its own
+
+    mock_asr.get_status.side_effect = _status
+    with patch("app.routers.transcription.get_asr_backend", return_value=mock_asr):
+        async with _client() as client:
+            upload = await client.post("/api/upload", files={"file": ("test.mp3", b"fake", "audio/mpeg")})
+            resp = await client.post("/api/transcribe", json={"file_id": upload.json()["id"], "language": "en", "model": "base"})
+            txn_id = resp.json()["id"]
+            await asyncio.wait_for(polling.wait(), timeout=2)
+            task = transcription_module._running_transcriptions[txn_id]
+            resp = await client.delete(f"/api/transcription/{txn_id}")
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, timeout=5)
+            for _ in range(100):  # the endpoint's own cleanup runs in the background
+                if mock_asr.cleanup.await_count:
+                    break
+                await asyncio.sleep(0.01)
+
+    assert resp.status_code == 200
+    assert (await _row(txn_id)) is None
+    mock_asr.cleanup.assert_any_await("asr-job-123")
+    # The endpoint may schedule a second cleanup for the same id; that is harmless.
+    assert all(c.args == ("asr-job-123",) for c in mock_asr.cleanup.await_args_list)

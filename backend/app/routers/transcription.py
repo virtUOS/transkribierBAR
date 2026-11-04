@@ -293,6 +293,11 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
         # about to be, so there is nothing to mark failed. Backends whose remote
         # job outlives the request get their cleanup from the delete endpoint.
         logging.info("Transcription %s cancelled", transcription_id)
+        # The delete endpoint reads asr_job_id from the row, which the task may
+        # not have written yet. For whisperx this is a synchronous pop, for
+        # MurmurAI a remote DELETE the endpoint may repeat (a 404 counts as done).
+        if asr_job_id is not None:
+            await backend.cleanup(asr_job_id)
         raise
     except Exception as e:
         async with get_db() as db:

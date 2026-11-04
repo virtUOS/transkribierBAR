@@ -237,3 +237,18 @@ async def test_submit_cancelled_leaves_no_status(backend, audio):
         with pytest.raises(asyncio.CancelledError):
             await task
     assert set(module._statuses) == before
+
+
+@pytest.mark.asyncio
+async def test_cleanup_drops_in_memory_entries(backend):
+    """A task cancelled between submit() and get_result() (#309) must not leave the transcript behind."""
+    from app.models import TranscriptionResult
+    from app.services.asr import whisperx as module
+    module._results["j1"] = TranscriptionResult(id="j1", status="completed", text="secret")
+    module._statuses["j1"] = "completed"
+    module._errors["j1"] = "x"
+    await backend.cleanup("j1")
+    assert "j1" not in module._results
+    assert "j1" not in module._statuses
+    assert "j1" not in module._errors
+    await backend.cleanup("unknown")  # a job id it does not know is a no-op
