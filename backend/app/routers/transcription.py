@@ -92,7 +92,7 @@ async def start_transcription(
 
     gauge_inc(transcription_queue_depth)
     submitted_at = time.monotonic()
-    _start_transcription(transcription_id, mp3_path, req, submitted_at)
+    _spawn_transcription_task(transcription_id, mp3_path, req, submitted_at)
     return {"id": transcription_id, "status": "pending"}
 
 
@@ -103,7 +103,9 @@ async def start_transcription(
 _running_transcriptions: dict[str, asyncio.Task] = {}
 
 
-def _start_transcription(transcription_id, mp3_path, req, submitted_at) -> asyncio.Task:
+def _spawn_transcription_task(
+    transcription_id: str, mp3_path: str, req: TranscriptionSettingsModel, submitted_at: float
+) -> asyncio.Task:
     task = asyncio.create_task(_run_transcription(transcription_id, mp3_path, req, submitted_at))
     _running_transcriptions[transcription_id] = task
 
@@ -289,9 +291,11 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
             logging.warning("Title generation failed for %s: %s", transcription_id, e)
 
     except asyncio.CancelledError:
-        # Deleted while running, or the app is shutting down: the row is gone or
-        # about to be, so there is nothing to mark failed. Backends whose remote
-        # job outlives the request get their cleanup from the delete endpoint.
+        # Deleted while running: the row is gone and the endpoint handled the
+        # files. Shutdown: the row stays 'processing'; the next start's
+        # fail_interrupted_transcriptions marks it server_restarted and
+        # cleanup_remote_jobs handles the remote copy. Either way nothing is
+        # marked failed here.
         logging.info("Transcription %s cancelled", transcription_id)
         # The delete endpoint reads asr_job_id from the row, which the task may
         # not have written yet. For whisperx this is a synchronous pop, for
@@ -515,8 +519,11 @@ async def delete_transcription(transcription_id: str, user: UserInfo = Depends(g
             should_delete_files = False
         await db.commit()
 
-    # The row is already gone, so the task can write nothing more. The remote
-    # copy (asr_job_id, when the task got that far) is deleted below as before.
+    # The row is already gone, so the task can write nothing more. asr_job_id
+    # read from the row can be NULL although the task's submit() already
+    # returned (the write comes right after); the task's cancel branch cleans
+    # that case up itself. The cleanup below covers rows whose task is no longer
+    # running.
     running = _running_transcriptions.pop(transcription_id, None)
     if running:
         running.cancel()
