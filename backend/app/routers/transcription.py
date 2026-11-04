@@ -195,7 +195,6 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
 
     gauge_dec(transcription_queue_depth)
     observe(transcription_queue_wait_seconds, time.monotonic() - submitted_at, backend_name)
-    gauge_inc(active_transcriptions)
     start_time = time.monotonic()
 
     try:
@@ -207,6 +206,9 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
         observe(transcription_audio_duration_seconds, audio_duration, backend_name)
 
     asr_job_id: str | None = None
+    # Next to the try whose finally balances it: a cancel during the probe above
+    # must not leave the gauge incremented.
+    gauge_inc(active_transcriptions)
     try:
         async with get_db() as db:
             await db.execute("UPDATE transcriptions SET status = ? WHERE id = ?", ("processing", transcription_id))

@@ -921,3 +921,30 @@ async def test_running_registry_drops_finished_tasks(mock_asr):
             await asyncio.wait_for(task, timeout=5)
     assert txn_id not in transcription_module._running_transcriptions
     assert (await _row(txn_id))["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_delete_during_the_duration_probe_keeps_the_gauge_balanced(mock_asr):
+    from app.metrics import active_transcriptions
+    probing = asyncio.Event()
+
+    async def _probe(file_path):
+        probing.set()
+        await asyncio.Event().wait()  # never returns on its own
+
+    active_before = active_transcriptions._value.get()
+    with patch("app.routers.transcription.get_asr_backend", return_value=mock_asr), \
+         patch("app.routers.transcription.get_media_duration", _probe):
+        async with _client() as client:
+            upload = await client.post("/api/upload", files={"file": ("test.mp3", b"fake", "audio/mpeg")})
+            resp = await client.post("/api/transcribe", json={"file_id": upload.json()["id"], "language": "en", "model": "base"})
+            txn_id = resp.json()["id"]
+            await asyncio.wait_for(probing.wait(), timeout=2)
+            task = transcription_module._running_transcriptions[txn_id]
+            resp = await client.delete(f"/api/transcription/{txn_id}")
+
+    assert resp.status_code == 200
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert active_transcriptions._value.get() == active_before
+    mock_asr.submit.assert_not_called()
