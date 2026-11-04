@@ -103,6 +103,24 @@ export function RecordingSources(props: RecordingSourcesProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per camera toggle, not on every device list change
   }, [useCamera, cameraDisabled])
 
+  // Monitor sources are system audio, not microphones (#284)
+  const microphones = getMicrophoneCandidates(audioDevices)
+
+  // The device the microphone records from: the chosen id, or for '' the
+  // browser's default device, which Firefox lists first. When that device is a
+  // monitor hidden from the field (#284), pin the first listed microphone so
+  // the recording matches what the field shows; otherwise the default monitor
+  // would be recorded twice (as microphone and as system audio) and no voice.
+  useEffect(() => {
+    if (audioDevices.length === 0) return
+    const candidates = getMicrophoneCandidates(audioDevices)
+    const recordingFrom = audioDeviceId
+      ? audioDevices.find((d) => d.deviceId === audioDeviceId)
+      : audioDevices.find((d) => d.deviceId !== 'default')
+    if (!recordingFrom || candidates.includes(recordingFrom)) return
+    onAudioDeviceChange(candidates[0].deviceId)
+  }, [audioDevices, audioDeviceId, onAudioDeviceChange])
+
   // Keep the second device a valid candidate: select the first one when unset, stale, or equal to the microphone
   useEffect(() => {
     if (systemAudioSupport !== 'dual-device' || !captureSystemAudio) return
@@ -129,9 +147,6 @@ export function RecordingSources(props: RecordingSourcesProps) {
       </button>
     </div>
   )
-
-  // Monitor sources are system audio, not microphones (#284)
-  const microphones = getMicrophoneCandidates(audioDevices)
 
   return (
     <div data-help="record-sources" className="flex flex-col gap-3">

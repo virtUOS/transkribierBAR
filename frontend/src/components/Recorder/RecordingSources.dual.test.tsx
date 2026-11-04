@@ -30,7 +30,12 @@ function stubDevices(devices: object[]) {
 
 function renderSources(overrides: Partial<React.ComponentProps<typeof RecordingSources>>) {
   const onSecondAudioDeviceChange = vi.fn()
-  render(
+  renderWith({ onSecondAudioDeviceChange, ...overrides })
+  return onSecondAudioDeviceChange
+}
+
+function renderWith(overrides: Partial<React.ComponentProps<typeof RecordingSources>>) {
+  return render(
     <RecordingSources
       useMicrophone
       onUseMicrophoneChange={vi.fn()}
@@ -39,7 +44,7 @@ function renderSources(overrides: Partial<React.ComponentProps<typeof RecordingS
       captureSystemAudio
       onCaptureSystemAudioChange={vi.fn()}
       secondAudioDeviceId=""
-      onSecondAudioDeviceChange={onSecondAudioDeviceChange}
+      onSecondAudioDeviceChange={vi.fn()}
       useCamera={false}
       onUseCameraChange={vi.fn()}
       videoDeviceId=""
@@ -47,7 +52,6 @@ function renderSources(overrides: Partial<React.ComponentProps<typeof RecordingS
       {...overrides}
     />,
   )
-  return onSecondAudioDeviceChange
 }
 
 const PICKER = { selector: 'select, output' }
@@ -169,8 +173,7 @@ describe('RecordingSources monitor devices (#284)', () => {
   it('leaves monitors out of the microphone list while another device remains', async () => {
     stubDevices([monitor, mic1, mic2])
     renderSources({})
-    const micSelect = await screen.findByLabelText('Microphone', PICKER)
-    expect(optionsOf(micSelect)).toEqual(['Mic 1', 'Mic 2'])
+    await waitFor(() => expect(optionsOf(screen.getByLabelText('Microphone', PICKER))).toEqual(['Mic 1', 'Mic 2']))
   })
 
   it('shows a lone monitor as the microphone', async () => {
@@ -189,8 +192,10 @@ describe('RecordingSources monitor devices (#284)', () => {
 
   it('still offers a leading monitor while the default microphone is in use', async () => {
     stubDevices([monitor, mic1, mic2])
-    const onChange = renderSources({ audioDeviceId: '' })
+    const onAudioDeviceChange = vi.fn()
+    const onChange = renderSources({ audioDeviceId: '', onAudioDeviceChange })
     await waitFor(() => expect(onChange).toHaveBeenCalledWith('monA'))
+    await waitFor(() => expect(onAudioDeviceChange).toHaveBeenCalledWith('mic1'))
     expect(optionsOf(screen.getByLabelText('System audio source'))).toEqual(['Monitor of Speakers', 'Mic 2'])
   })
 
@@ -201,5 +206,25 @@ describe('RecordingSources monitor devices (#284)', () => {
     await new Promise((r) => setTimeout(r, 20))
     expect(onChange).not.toHaveBeenCalled()
     expect(screen.getByLabelText('System audio source')).toHaveValue('mic2')
+  })
+
+  it('leaves the default microphone alone when it is not a monitor', async () => {
+    for (const devices of [[mic1, monitor], [defaultMic, mic1, monitor]]) {
+      stubDevices(devices)
+      const onAudioDeviceChange = vi.fn()
+      const { unmount } = renderWith({ audioDeviceId: '', onAudioDeviceChange })
+      await screen.findByLabelText('System audio source')
+      await new Promise((r) => setTimeout(r, 20))
+      expect(onAudioDeviceChange).not.toHaveBeenCalled()
+      unmount()
+    }
+  })
+
+  it('switches to a listed microphone when the chosen one is a hidden monitor', async () => {
+    stubDevices([monitor, mic1])
+    const onAudioDeviceChange = vi.fn()
+    renderSources({ audioDeviceId: 'monA', onAudioDeviceChange })
+    await waitFor(() => expect(onAudioDeviceChange).toHaveBeenCalledWith('mic1'))
+    expect(onAudioDeviceChange).toHaveBeenCalledTimes(1)
   })
 })

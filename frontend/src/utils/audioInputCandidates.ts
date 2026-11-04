@@ -13,7 +13,9 @@
  *   except the one the microphone records from, monitors first because they are
  *   what the user most likely wants. An empty `audioDeviceId` means the
  *   browser's default microphone, which the list shows as a "default" entry
- *   and/or as the first real microphone, so both are excluded then.
+ *   and/or as the first real microphone, so both are excluded then. Firefox
+ *   lists the default input first, so a leading monitor is the default input;
+ *   the component then pins a listed microphone (see RecordingSources).
  */
 export function isMonitorDevice(device: { label: string }): boolean {
   return /^Monitor of /.test(device.label)
