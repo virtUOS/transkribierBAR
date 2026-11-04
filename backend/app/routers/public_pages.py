@@ -4,7 +4,6 @@ from pathlib import Path
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from app.config import settings
 from app.public_pages import (
     Lang,
     apply_features,

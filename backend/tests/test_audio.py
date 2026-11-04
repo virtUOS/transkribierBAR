@@ -16,12 +16,12 @@ def _ffmpeg(*args):
     from app.services.audio import settings
     if shutil.which(settings.FFMPEG_PATH) is None:
         pytest.skip("ffmpeg not installed")
-    subprocess.run([settings.FFMPEG_PATH, "-y", "-loglevel", "error", *args], check=True)
+    subprocess.run([settings.FFMPEG_PATH, "-y", "-loglevel", "error", *args], check=True)  # noqa: S603  # executable from settings; args are the test's own literals and tmp paths
 
 
 def _probe(path):
     from app.services.audio import settings
-    return subprocess.run(
+    return subprocess.run(  # noqa: S603  # argument list is fixed; ffprobe path comes from settings
         [settings.FFPROBE_PATH, "-show_format", "-show_streams", "-show_chapters", str(path)],
         capture_output=True, text=True, check=True,
     ).stdout

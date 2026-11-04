@@ -117,7 +117,7 @@ async def get_media_duration(file_path: str) -> float | None:
             process.kill()
             try:
                 await process.wait()
-            except Exception:
+            except Exception:  # noqa: S110  # best-effort: waiting for the killed process
                 pass
         raise
 
@@ -141,6 +141,6 @@ async def has_video_stream(file_path: str) -> bool:
             process.kill()
             try:
                 await process.wait()
-            except Exception:
+            except Exception:  # noqa: S110  # best-effort: waiting for the killed process
                 pass
         raise

@@ -115,7 +115,7 @@ def ask(lang, question, transcription_id=None):
         "X-Auth-Request-Email": EMAIL,
     })
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310  # URL is a module constant, http only
             return parse_sse(resp)
     except urllib.error.HTTPError as exc:
         try:

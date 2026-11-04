@@ -110,7 +110,7 @@ async def relabel_stored_speakers(db: aiosqlite.Connection) -> RelabelCounts:
                 skipped += 1
             elif new != derived:
                 await db.execute(
-                    f"UPDATE transcriptions SET {column} = ? WHERE id = ?",
+                    f"UPDATE transcriptions SET {column} = ? WHERE id = ?",  # noqa: S608  # fixed tuple; values bound
                     (json.dumps(new, ensure_ascii=False), tid),
                 )
                 rewritten[column] += 1

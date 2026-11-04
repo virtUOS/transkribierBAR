@@ -1,0 +1,14 @@
+# Ruff, step 1 of #290: only the rules the code passes once the deliberate findings
+# are annotated, F (pyflakes) and S (the Bandit port). ASYNC follows in step 2, the
+# style rules and the formatter in step 3, which is why the line length is set now.
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["F", "S"]
+
+# Tests assert with `assert`, use fixed dummy credentials and use placeholder `/tmp` paths
+# by nature.
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S107", "S108"]
