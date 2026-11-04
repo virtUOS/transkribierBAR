@@ -1,3 +1,4 @@
+import asyncio
 import os
 import uuid
 import httpx
@@ -13,8 +14,9 @@ DEFAULT_READ_TIMEOUT = 600.0
 # In-memory cache for WhisperX results. WhisperX is synchronous, so submit() blocks
 # until complete — the result is stored in the DB by _run_transcription() immediately
 # after submit() returns. Entries live between submit() returning and
-# _run_transcription() reading get_result(), which removes them. A job the server
-# rejected keeps its failed status and error until get_result() or a process restart.
+# _run_transcription() reading get_result() or calling cleanup(), which remove
+# them; a cancelled request leaves none (see submit). A job the server rejected
+# keeps its failed status and error until one of those two or a process restart.
 _results: dict[str, TranscriptionResult] = {}
 _statuses: dict[str, str] = {}
 _errors: dict[str, str] = {}
@@ -24,6 +26,17 @@ class WhisperXBackend(ASRBackend):
     def __init__(self):
         self.base_url = settings.ASR_URL.rstrip("/")
         self.api_key = settings.ASR_API_KEY
+
+    async def cleanup(self, job_id: str) -> None:
+        """Drop the in-memory copy of a job.
+
+        The server keeps nothing with RESULT_STORE__ENABLED=false; this removes the
+        copy that a cancelled task (deleted mid-run, #309) would otherwise leave
+        until restart. A job id it does not know is a no-op.
+        """
+        _results.pop(job_id, None)
+        _statuses.pop(job_id, None)
+        _errors.pop(job_id, None)
 
     async def submit(self, file_path: str, ts: TranscriptionSettings) -> str:
         # Concurrency is capped by the caller (_run_transcription holds the ASR
@@ -36,6 +49,10 @@ class WhisperXBackend(ASRBackend):
             result = await self._call_whisperx(file_path, ts)
             _results[job_id] = result
             _statuses[job_id] = "completed"
+        except asyncio.CancelledError:
+            # The request was cancelled (transcription deleted, #309): nothing will ever read this job.
+            _statuses.pop(job_id, None)
+            raise
         except httpx.HTTPStatusError as e:
             # Surfaced through get_status, which the router turns into a failed job.
             _statuses[job_id] = "failed"

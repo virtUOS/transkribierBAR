@@ -92,8 +92,29 @@ async def start_transcription(
 
     gauge_inc(transcription_queue_depth)
     submitted_at = time.monotonic()
-    asyncio.create_task(_run_transcription(transcription_id, mp3_path, req, submitted_at))
+    _spawn_transcription_task(transcription_id, mp3_path, req, submitted_at)
     return {"id": transcription_id, "status": "pending"}
+
+
+# Running _run_transcription tasks by transcription id, so that a delete can
+# cancel the in-flight ASR request (#309): with the whisperx backend the request
+# is the task itself, and the server frees the GPU when the connection drops.
+# Also the strong references asyncio asks callers to keep.
+_running_transcriptions: dict[str, asyncio.Task] = {}
+
+
+def _spawn_transcription_task(
+    transcription_id: str, mp3_path: str, req: TranscriptionSettingsModel, submitted_at: float
+) -> asyncio.Task:
+    task = asyncio.create_task(_run_transcription(transcription_id, mp3_path, req, submitted_at))
+    _running_transcriptions[transcription_id] = task
+
+    def _forget(t: asyncio.Task) -> None:
+        if _running_transcriptions.get(transcription_id) is t:
+            del _running_transcriptions[transcription_id]
+
+    task.add_done_callback(_forget)
+    return task
 
 
 def _job_timeout_for(audio_duration: float | None) -> float:
@@ -176,7 +197,6 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
 
     gauge_dec(transcription_queue_depth)
     observe(transcription_queue_wait_seconds, time.monotonic() - submitted_at, backend_name)
-    gauge_inc(active_transcriptions)
     start_time = time.monotonic()
 
     try:
@@ -188,6 +208,9 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
         observe(transcription_audio_duration_seconds, audio_duration, backend_name)
 
     asr_job_id: str | None = None
+    # Next to the try whose finally balances it: a cancel during the probe above
+    # must not leave the gauge incremented.
+    gauge_inc(active_transcriptions)
     try:
         async with get_db() as db:
             await db.execute("UPDATE transcriptions SET status = ? WHERE id = ?", ("processing", transcription_id))
@@ -267,6 +290,19 @@ async def _run_transcription(transcription_id: str, file_path: str, req: Transcr
         except Exception as e:
             logging.warning("Title generation failed for %s: %s", transcription_id, e)
 
+    except asyncio.CancelledError:
+        # Deleted while running: the row is gone and the endpoint handled the
+        # files. Shutdown: the row stays 'processing'; the next start's
+        # fail_interrupted_transcriptions marks it server_restarted and
+        # cleanup_remote_jobs handles the remote copy. Either way nothing is
+        # marked failed here.
+        logging.info("Transcription %s cancelled", transcription_id)
+        # The delete endpoint reads asr_job_id from the row, which the task may
+        # not have written yet. For whisperx this is a synchronous pop, for
+        # MurmurAI a remote DELETE the endpoint may repeat (a 404 counts as done).
+        if asr_job_id is not None:
+            await backend.cleanup(asr_job_id)
+        raise
     except Exception as e:
         async with get_db() as db:
             cursor = await db.execute(
@@ -482,6 +518,15 @@ async def delete_transcription(transcription_id: str, user: UserInfo = Depends(g
         else:
             should_delete_files = False
         await db.commit()
+
+    # The row is already gone, so the task can write nothing more. asr_job_id
+    # read from the row can be NULL although the task's submit() already
+    # returned (the write comes right after); the task's cancel branch cleans
+    # that case up itself. The cleanup below covers rows whose task is no longer
+    # running.
+    running = _running_transcriptions.pop(transcription_id, None)
+    if running:
+        running.cancel()
 
     # Remove files from disk only if the file record was deleted
     if file_row and should_delete_files:

@@ -842,3 +842,145 @@ async def test_transcribe_passes_timeout_and_request_id_to_backend(mock_asr, mon
     ts = mock_asr.submit.await_args.args[1]
     assert ts.request_id == resp.json()["id"]
     assert ts.job_timeout == 1234.0
+
+
+@pytest.mark.asyncio
+async def test_delete_cancels_the_running_asr_request(mock_asr):
+    """#309: with a synchronous backend (whisperx) the ASR request *is* the task,
+    so deleting the transcription must cancel it to free the GPU and the semaphore."""
+    from app.config import settings
+    from app.metrics import active_transcriptions
+    from app.services.asr import base as asr_base
+    submitted = asyncio.Event()
+
+    async def _submit(file_path, ts):
+        submitted.set()
+        await asyncio.Event().wait()  # never returns on its own
+
+    mock_asr.submit.side_effect = _submit
+    active_before = active_transcriptions._value.get()
+    with patch("app.routers.transcription.get_asr_backend", return_value=mock_asr):
+        async with _client() as client:
+            upload = await client.post("/api/upload", files={"file": ("test.mp3", b"fake", "audio/mpeg")})
+            resp = await client.post("/api/transcribe", json={"file_id": upload.json()["id"], "language": "en", "model": "base"})
+            txn_id = resp.json()["id"]
+            await asyncio.wait_for(submitted.wait(), timeout=2)
+            task = transcription_module._running_transcriptions[txn_id]
+            assert (await _row(txn_id))["status"] == "processing"
+            resp = await client.delete(f"/api/transcription/{txn_id}")
+
+    assert resp.status_code == 200
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(task, timeout=5)
+    assert txn_id not in transcription_module._running_transcriptions
+    assert asr_base.asr_semaphore._value == settings.ASR_MAX_CONCURRENT
+    assert active_transcriptions._value.get() == active_before
+    assert await _row(txn_id) is None
+    # No job id was recorded, so there is no remote copy to delete.
+    mock_asr.cleanup.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_delete_cancels_a_queued_transcription(mock_asr, monkeypatch):
+    """A delete while the task still waits for the ASR semaphore cancels it before it submits."""
+    from app.services.asr import base as asr_base
+    blocker = asyncio.Semaphore(1)
+    await blocker.acquire()  # every job queues behind this
+    monkeypatch.setattr(asr_base, "asr_semaphore", blocker)
+    monkeypatch.setattr(transcription_module, "asr_semaphore", blocker)
+
+    with patch("app.routers.transcription.get_asr_backend", return_value=mock_asr):
+        async with _client() as client:
+            upload = await client.post("/api/upload", files={"file": ("test.mp3", b"fake", "audio/mpeg")})
+            resp = await client.post("/api/transcribe", json={"file_id": upload.json()["id"], "language": "en", "model": "base"})
+            txn_id = resp.json()["id"]
+            for _ in range(100):  # a non-empty waiter list means the task waits for a permit
+                if blocker._waiters:
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                pytest.fail("the task never queued at the ASR semaphore")
+            assert (await _row(txn_id))["status"] == "processing"
+            task = transcription_module._running_transcriptions[txn_id]
+            resp = await client.delete(f"/api/transcription/{txn_id}")
+
+    assert resp.status_code == 200
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(task, timeout=5)
+    mock_asr.submit.assert_not_called()
+    blocker.release()
+    assert blocker._value == 1  # the cancelled waiter took no permit
+
+
+@pytest.mark.asyncio
+async def test_running_registry_drops_finished_tasks(mock_asr):
+    with patch("app.routers.transcription.get_asr_backend", return_value=mock_asr), \
+         patch("app.services.llm.get_llm_provider", return_value=None):
+        async with _client() as client:
+            upload = await client.post("/api/upload", files={"file": ("test.mp3", b"fake", "audio/mpeg")})
+            resp = await client.post("/api/transcribe", json={"file_id": upload.json()["id"], "language": "en", "model": "base"})
+            txn_id = resp.json()["id"]
+            task = transcription_module._running_transcriptions[txn_id]
+            await asyncio.wait_for(task, timeout=5)
+    assert txn_id not in transcription_module._running_transcriptions
+    assert (await _row(txn_id))["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_delete_during_the_duration_probe_keeps_the_gauge_balanced(mock_asr):
+    from app.metrics import active_transcriptions
+    probing = asyncio.Event()
+
+    async def _probe(file_path):
+        probing.set()
+        await asyncio.Event().wait()  # never returns on its own
+
+    active_before = active_transcriptions._value.get()
+    with patch("app.routers.transcription.get_asr_backend", return_value=mock_asr), \
+         patch("app.routers.transcription.get_media_duration", _probe):
+        async with _client() as client:
+            upload = await client.post("/api/upload", files={"file": ("test.mp3", b"fake", "audio/mpeg")})
+            resp = await client.post("/api/transcribe", json={"file_id": upload.json()["id"], "language": "en", "model": "base"})
+            txn_id = resp.json()["id"]
+            await asyncio.wait_for(probing.wait(), timeout=2)
+            task = transcription_module._running_transcriptions[txn_id]
+            resp = await client.delete(f"/api/transcription/{txn_id}")
+
+    assert resp.status_code == 200
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(task, timeout=5)
+    assert active_transcriptions._value.get() == active_before
+    mock_asr.submit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_delete_cancels_a_job_while_polling(mock_asr):
+    """#309: a cancel after submit() returned and the job id was stored must
+    clean up the remote job from the task itself, not only from the endpoint."""
+    polling = asyncio.Event()
+
+    async def _status(job_id):
+        polling.set()
+        await asyncio.Event().wait()  # never returns on its own
+
+    mock_asr.get_status.side_effect = _status
+    with patch("app.routers.transcription.get_asr_backend", return_value=mock_asr):
+        async with _client() as client:
+            upload = await client.post("/api/upload", files={"file": ("test.mp3", b"fake", "audio/mpeg")})
+            resp = await client.post("/api/transcribe", json={"file_id": upload.json()["id"], "language": "en", "model": "base"})
+            txn_id = resp.json()["id"]
+            await asyncio.wait_for(polling.wait(), timeout=2)
+            task = transcription_module._running_transcriptions[txn_id]
+            resp = await client.delete(f"/api/transcription/{txn_id}")
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, timeout=5)
+            for _ in range(100):  # the endpoint's own cleanup runs in the background
+                if mock_asr.cleanup.await_count:
+                    break
+                await asyncio.sleep(0.01)
+
+    assert resp.status_code == 200
+    assert (await _row(txn_id)) is None
+    mock_asr.cleanup.assert_any_await("asr-job-123")
+    # The endpoint may schedule a second cleanup for the same id; that is harmless.
+    assert all(c.args == ("asr-job-123",) for c in mock_asr.cleanup.await_args_list)
