@@ -13,7 +13,7 @@ Instructions for coding agents working in this repository.
 ### Checking a change
 
 ```bash
-scripts/check.sh           # what CI runs on a pull request: backend tests, frontend lint/types/tests, with coverage floors
+scripts/check.sh           # what CI runs on a pull request: backend lint/tests, frontend lint/types/tests, with coverage floors
 scripts/check.sh --e2e     # plus the end-to-end tests (needs ffmpeg and `npx playwright install chromium firefox`)
 scripts/check.sh --image   # plus building and smoke-testing the container image (docker or podman)
 ```
@@ -47,6 +47,7 @@ pip install -r requirements-dev.txt   # runtime + test deps
 uvicorn app.main:app --reload --port 8000
 pytest               # run tests
 pytest --cov         # with the coverage floor from .coveragerc, as CI runs it
+ruff check           # lint; rules in pyproject.toml, CI runs it
 python -m scripts.fake_services --port 8880   # fake ASR+LLM servers for running the app without GPUs
 ```
 
@@ -121,7 +122,7 @@ current numbers. Raise them when coverage grows; never lower them to get a chang
 ## Code Style
 
 - Frontend: ESLint 10 + TypeScript ESLint, no semicolons enforced by formatter
-- Backend: Standard Python conventions, async/await throughout
+- Backend: Ruff with `F` and `S` (config in `backend/pyproject.toml`, line length 120; `ASYNC` and the style rules are planned, #290). A deliberate finding gets `# noqa: <code>` with a one-line reason on that line, never a bare `# noqa`; the tests' per-file ignores in `pyproject.toml` are the only config-level ones, and a new one needs a reason in a comment there. Standard Python conventions, async/await throughout
 - Commit messages: conventional commits (`feat:`, `fix:`, `refactor:`, etc.)
 - Never add "Co-Authored-By" lines to commit messages
 

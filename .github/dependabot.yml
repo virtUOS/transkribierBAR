@@ -38,10 +38,14 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     groups:
+      # A Ruff minor release can promote new F/S rules and turn CI red; it gets its
+      # own PR instead of blocking the grouped bumps.
       backend:
         update-types:
           - minor
           - patch
+        exclude-patterns:
+          - ruff
 
   # Base images of the application image. New Python and Node versions come
   # as separate PRs: CI fails until backend/.python-version or

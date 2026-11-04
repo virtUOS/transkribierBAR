@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run the checks CI runs on a pull request. Usage, from anywhere in the repo:
-#   scripts/check.sh            backend tests, frontend lint/typecheck/tests (about a minute)
+#   scripts/check.sh            backend lint and tests, frontend lint/typecheck/tests (about a minute)
 #   scripts/check.sh --e2e      the above plus the end-to-end tests
 #   scripts/check.sh --image    the above plus building and smoke-testing the container image
 # The backend runs with $PYTHON, else the repo's .venv, else python3.
@@ -18,6 +18,9 @@ for arg in "$@"; do
 done
 
 step() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
+
+step "backend: ruff"
+(cd "$root/backend" && "$python" -m ruff check)
 
 step "backend: pytest with coverage"
 (cd "$root/backend" && LLM_API_KEY=${LLM_API_KEY:-dummy} "$python" -m pytest -q --cov)

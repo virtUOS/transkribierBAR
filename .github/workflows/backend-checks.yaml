@@ -72,6 +72,11 @@ jobs:
         working-directory: backend
         run: pip install --require-hashes -r requirements-dev.txt
 
+      - name: Lint
+        working-directory: backend
+        # Rules and the tests' per-file ignores live in backend/pyproject.toml (#290).
+        run: ruff check
+
       - name: Test
         working-directory: backend
         # Fails below the coverage floor in backend/.coveragerc.
