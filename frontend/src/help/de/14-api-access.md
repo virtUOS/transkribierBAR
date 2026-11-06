@@ -43,7 +43,7 @@ Ist der Token unbekannt, abgelaufen oder widerrufen, antwortet der Server mit de
 Für den WebSocket, der den Status meldet, übergeben Sie den Token als Query-Parameter `token`, weil Browser dort keine Header setzen können:
 
 ```
-wss://transcription.uni-osnabrueck.de/api/ws/status/{transcription_id}?token=tw_…
+wss://transkribierbar.uni-osnabrueck.de/api/ws/status/{transcription_id}?token=tw_…
 ```
 
 ## Transkribieren Schritt für Schritt
@@ -53,7 +53,7 @@ In den Beispielen steht `tw_…` als Platzhalter für Ihren Token, `FILE_ID` und
 **1. Datei hochladen.** Senden Sie sie als Formularfeld `file`:
 
 ```
-curl -H "Authorization: Bearer tw_…" -F "file=@interview.mp3" https://transcription.uni-osnabrueck.de/api/upload
+curl -H "Authorization: Bearer tw_…" -F "file=@interview.mp3" https://transkribierbar.uni-osnabrueck.de/api/upload
 ```
 
 Die Antwort ist JSON. Das Feld `id` ist die `FILE_ID`. Es gelten dieselben Dateitypen und dieselbe Höchstgröße wie in der Weboberfläche, siehe Abschnitt „Hochladen“. Andere Dateitypen beantwortet der Server mit dem Status 400, zu große Dateien mit 413.
@@ -61,7 +61,7 @@ Die Antwort ist JSON. Das Feld `id` ist die `FILE_ID`. Es gelten dieselben Datei
 **2. Transkription starten.** Senden Sie die Einstellungen als JSON:
 
 ```
-curl -X POST https://transcription.uni-osnabrueck.de/api/transcribe \
+curl -X POST https://transkribierbar.uni-osnabrueck.de/api/transcribe \
   -H "Authorization: Bearer tw_…" \
   -H "Content-Type: application/json" \
   -d '{"file_id": "FILE_ID", "language": "de", "model": "{{default_model}}"}'
@@ -85,7 +85,7 @@ Die Antwort enthält die `id` der Transkription (`TRANSCRIPTION_ID`) und den Sta
 **3. Auf das Ergebnis warten.** Fragen Sie den Status ab, bis er `completed` oder `failed` ist:
 
 ```
-curl -H "Authorization: Bearer tw_…" https://transcription.uni-osnabrueck.de/api/status/TRANSCRIPTION_ID
+curl -H "Authorization: Bearer tw_…" https://transkribierbar.uni-osnabrueck.de/api/status/TRANSCRIPTION_ID
 ```
 
 Der Status ist `pending`, `processing`, `completed` oder `failed`. Bei `failed` nennt das Feld `error` den Grund, und `error_code` bezeichnet ihn mit einem festen Code: `server_restarted` (der Server wurde während der Transkription neu gestartet), `timeout` (die Spracherkennung ist nicht innerhalb des Zeitlimits fertig geworden), `asr_unreachable` (die Anfrage an die Spracherkennung ist fehlgeschlagen), `asr_failed` (die Spracherkennung hat einen Fehler gemeldet) oder `unknown` (ein anderer Grund, den nur `error` beschreibt). Ist kein Code gespeichert, ist `error_code` `null`.
@@ -95,7 +95,7 @@ Statt die Abfrage zu wiederholen, können Sie den WebSocket aus dem Abschnitt �
 **4. Ergebnis abrufen.** Solange die Transkription nicht fertig ist, beantwortet der Server diesen Aufruf mit dem Status 400:
 
 ```
-curl -H "Authorization: Bearer tw_…" https://transcription.uni-osnabrueck.de/api/transcription/TRANSCRIPTION_ID
+curl -H "Authorization: Bearer tw_…" https://transkribierbar.uni-osnabrueck.de/api/transcription/TRANSCRIPTION_ID
 ```
 
 Die Antwort enthält die Äußerungen (`utterances`, jeweils mit `start` und `end` in Millisekunden, `text` und `speaker`), den gesamten Text (`text`), die angeforderte Sprache (`language`, `null` bei automatischer Erkennung), die von der Spracherkennung gemeldete Sprache (`detected_language`, `null`, wenn keine gespeichert ist) und die Namen der Sprechenden (`speaker_mappings`). Für eine fertige Datei hängen Sie stattdessen `/export/txt`, `/export/srt`, `/export/vtt` oder `/export/json` an die Adresse an.
