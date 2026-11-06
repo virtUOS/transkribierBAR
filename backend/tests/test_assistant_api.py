@@ -74,6 +74,13 @@ async def test_api_token_is_refused(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_lowercase_bearer_api_token_is_refused(monkeypatch):
+    use(monkeypatch, FakeProvider())
+    r = await post(body(), {**HEADERS, "Authorization": "bearer tw_x"})
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_streams_deltas_then_done(monkeypatch):
     fake = use(monkeypatch, FakeProvider())
     msgs = [

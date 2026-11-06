@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, model_validator
 
-from app.dependencies import get_current_user
+from app.dependencies import api_token_from_header, get_current_user
 from app.metrics import inc, measure_llm_operation, support_assistant_requests_total
 from app.models import UserInfo
 from app.services import support_assistant as sa
@@ -35,7 +35,7 @@ async def _require_available() -> None:
 
 
 async def _browser_user(request: Request) -> UserInfo:
-    if request.headers.get("Authorization", "").startswith("Bearer tw_"):
+    if api_token_from_header(request.headers.get("Authorization", "")) is not None:
         raise HTTPException(
             status_code=403, detail="API tokens can't be used for the assistant."
         )

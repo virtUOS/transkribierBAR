@@ -96,6 +96,33 @@ async def test_non_tw_bearer_falls_through(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_bearer_scheme_is_case_insensitive(monkeypatch):
+    """RFC 9110 §11.1: the scheme is case-insensitive, the token's tw_ prefix is not."""
+    monkeypatch.setattr(config_module.settings, "ENABLE_API_TOKENS", True)
+    async with get_db() as db:
+        await db.execute("INSERT INTO users (id, email) VALUES ('u1', 'u1@x')")
+        await db.commit()
+        t = await create_token(db, user_id="u1", name="k", expires_in_days=30)
+
+    transport = ASGITransport(app=_mini_app())
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        lower = await c.get("/whoami", headers={"Authorization": f"bearer {t['token']}"})
+        upper = await c.get("/whoami", headers={"Authorization": f"BEARER  {t['token']}"})
+        invalid = await c.get(
+            "/whoami",
+            headers={"Authorization": "bearer tw_notvalid", "X-Auth-Request-User": "someone-else"},
+        )
+        upper_prefix = await c.get(
+            "/whoami",
+            headers={"Authorization": "Bearer TW_notatoken", "X-Auth-Request-User": "hdr-user"},
+        )
+    assert lower.status_code == 200 and lower.json()["id"] == "u1"
+    assert upper.status_code == 200 and upper.json()["id"] == "u1"
+    assert invalid.status_code == 401
+    assert upper_prefix.status_code == 200 and upper_prefix.json()["id"] == "hdr-user"
+
+
+@pytest.mark.asyncio
 async def test_is_admin_true_when_email_in_admin_list(monkeypatch):
     monkeypatch.setattr(config_module.settings, "ADMIN_EMAILS", ["admin@example.com"])
     monkeypatch.setattr(config_module.settings, "INVITATION_MODE", False)

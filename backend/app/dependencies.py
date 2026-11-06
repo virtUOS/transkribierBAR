@@ -90,11 +90,24 @@ async def _invitation_gate_allows(user_id: str, email: str | None) -> bool:
     return False
 
 
+def api_token_from_header(authorization: str) -> str | None:
+    """Return the raw `tw_…` token carried by an Authorization header value, else None.
+
+    The scheme is compared case-insensitively (RFC 9110 §11.1); the token's `tw_`
+    prefix is not. The reverse proxy's bypass rule for token requests matches the
+    header the same way, so the two must be changed together.
+    """
+    parts = authorization.split(None, 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+    raw = parts[1].strip()
+    return raw if raw.startswith("tw_") else None
+
+
 async def get_current_user(request: Request) -> UserInfo:
     if settings.ENABLE_API_TOKENS:
-        auth = request.headers.get("Authorization", "")
-        if auth.startswith("Bearer tw_"):
-            raw = auth.removeprefix("Bearer ").strip()
+        raw = api_token_from_header(request.headers.get("Authorization", ""))
+        if raw is not None:
             async with get_db() as db:
                 result = await resolve_token(db, raw_token=raw)
             if result is not None:
@@ -150,7 +163,7 @@ async def get_session_user(request: Request) -> UserInfo:
     Used by endpoints that manage API tokens, so a token can never mint, list
     or revoke tokens.
     """
-    if request.headers.get("Authorization", "").startswith("Bearer tw_"):
+    if api_token_from_header(request.headers.get("Authorization", "")) is not None:
         raise HTTPException(
             status_code=403,
             detail="API tokens can't be used to manage API tokens.",
