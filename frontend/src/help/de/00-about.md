@@ -10,7 +10,7 @@ transkribierBAR wandelt gesprochene Sprache aus Audio- und Videodateien in Text 
 
 ## Zugang
 
-Melden Sie sich unter **transcription.uni-osnabrueck.de** mit Ihrem Uni-Login an. Danach sehen Sie die Übersicht Ihrer Transkriptionen. Die Oberfläche gibt es auf Deutsch und Englisch.
+Melden Sie sich unter **transkribierbar.uni-osnabrueck.de** mit Ihrem Uni-Login an. Danach sehen Sie die Übersicht Ihrer Transkriptionen. Die Oberfläche gibt es auf Deutsch und Englisch.
 
 ## Aufbewahrung
 

@@ -10,7 +10,7 @@ transkribierBAR turns speech in audio and video files into text. You upload a fi
 
 ## Access
 
-Sign in at **transcription.uni-osnabrueck.de** with your Uni-Login. You then see the overview of your transcriptions. The interface is available in German and English.
+Sign in at **transkribierbar.uni-osnabrueck.de** with your Uni-Login. You then see the overview of your transcriptions. The interface is available in German and English.
 
 ## Retention
 
