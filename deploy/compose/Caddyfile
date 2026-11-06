@@ -10,7 +10,7 @@
 
     @api_bearer {
         path /api/*
-        header_regexp Authorization ^Bearer\s+tw_
+        header_regexp Authorization ^(?i:bearer)\s+tw_
     }
     handle @api_bearer {
         request_header -X-Auth-Request-User

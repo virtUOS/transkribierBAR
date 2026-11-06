@@ -383,6 +383,17 @@ async def test_revoked_token_cannot_manage_tokens(monkeypatch):
     assert r.status_code == 403
 
 
+@pytest.mark.asyncio
+async def test_lowercase_bearer_scheme_cannot_manage_tokens(monkeypatch):
+    monkeypatch.setattr(config_module.settings, "ENABLE_API_TOKENS", True)
+    monkeypatch.setattr(config_module.settings, "DEV_MODE", True)
+    t = await _dev_user_token()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        r = await c.get("/api/tokens", headers={"Authorization": f"bearer {t['token']}"})
+    assert r.status_code == 403
+
+
 def _minutes_from_now(value: str, days: int) -> float:
     from datetime import datetime, timedelta, timezone
     expected = datetime.now(timezone.utc) + timedelta(days=days)
